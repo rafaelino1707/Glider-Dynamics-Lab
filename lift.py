@@ -68,10 +68,6 @@ if af_obj is None:
     except Exception:
         pass
 
-# final fallback: use naca0012 so script won't crash
-if af_obj is None:
-    print("[FALLBACK] Using NACA0012 as fallback airfoil. Put your .dat in project folder to use it.")
-    af_obj = asb.Airfoil("naca0012")
 
 # -------------------------
 # 2) Define the glider (use the loaded airfoil for the main wing sections)
@@ -123,7 +119,7 @@ glider = asb.Airplane(
 )
 
 # Mass (optional)
-mass_kg = 12.0
+mass_kg = 2.0
 g = 9.80665
 weight_N = mass_kg * g
 
