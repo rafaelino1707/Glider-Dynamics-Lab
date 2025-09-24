@@ -1,9 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-alfas, CLs, CDs, CDps, CMs, L_D_Quocients = [], [], [], [], [], []
+
 
 def read_polar(filename):
+    alfas, CLs, CDs, CDps, CMs, L_D_Quocients = [], [], [], [], [], []
     with open(filename, "r") as file:
         i = 0
         lines = file.readlines()
@@ -17,28 +18,61 @@ def read_polar(filename):
                 CMs.append(float(values[4]))
                 L_D_Quocients.append(float(values[1])/float(values[2]))
             i+=1
+    
+    return alfas, CLs, CDs, CDps, CMs, L_D_Quocients
 
-read_polar("s1223_sim1.txt")
+a1, b1, c1, d1, e1, f1 = read_polar("Airfoils/selig_s1223/s1223_Re_5e4.txt")
+a2, b2, c2, d2, e2, f2 = read_polar("Airfoils/selig_s1223/s1223_Re_1e5.txt")
+a3, b3, c3, d3, e3, f3 = read_polar("Airfoils/selig_s1223/s1223_Re_2e5.txt")
+print(b2)
+
+plt.figure(figsize=(15,7))
+
 ### Plotting the Lift Curve ###
-plt.figure(figsize=(11,8))
+plt.subplot(1, 3, 1)
+plt.plot(a1, b1, "k")
+plt.xlabel("Angle of Atack [deg]")
+plt.ylabel("Lift Coefficient")
+plt.grid(True)
+plt.title("Lift Curve, Re=5e4")
+
+### Plotting the Drag Curve ###
+plt.subplot(1, 3, 2)
+plt.plot(a2, b2, "k")
+plt.xlabel("Angle of Atack [deg]")
+plt.ylabel("Lift Coefficient")
+plt.grid(True)
+plt.title("Lift Curve, Re=1e5")
+
+### Plotting the GLide Efficiency Over Angle of Atack ###
+plt.subplot(1, 3, 3)
+plt.plot(a3, b3, "k")
+plt.xlabel("Angle of Atack [deg]")
+plt.ylabel("Lift Coefficient")
+plt.grid(True)
+plt.title("Lift Curve, Re=2e5")
+
+plt.show()
+
+### Plotting the Lift Curve ###
 plt.plot(alfas, CLs, "k")
 plt.xlabel("Angle of Atack [deg]")
 plt.ylabel("Lift Coefficient")
 plt.grid(True)
 plt.title("Lift Curve")
 plt.savefig("Lift_Curve")
+plt.show()
 
 ### Plotting the Drag Curve ###
-plt.figure(figsize=(11,8))
 plt.plot(alfas, CDs, "k")
 plt.xlabel("Angle of Atack [deg]")
 plt.ylabel("Drag Coefficient")
 plt.grid(True)
 plt.title("Drag Curve")
 plt.savefig("Drag_Curve")
+plt.show()
 
-### Plotting the GLide Efficiency Over Angle of Atack ###
-plt.figure(figsize=(11,8))
+### Plotting the GLide Efficiency Over Angle of Atack ##
 plt.plot(alfas, L_D_Quocients, "k")
 plt.xlabel("Angle of Atack [Degrees]")
 plt.ylabel("Glide Efficiency [L/D]")
