@@ -25,34 +25,41 @@ a1, b1, c1, d1, e1, f1 = read_polar("Airfoils/selig_s1223/s1223_Re_5e4.txt")
 a2, b2, c2, d2, e2, f2 = read_polar("Airfoils/selig_s1223/s1223_Re_1e5.txt")
 a3, b3, c3, d3, e3, f3 = read_polar("Airfoils/selig_s1223/s1223_Re_2e5.txt")
 print(b2)
-
 plt.figure(figsize=(15,7))
+
+# Título principal da janela
+plt.suptitle("Lift Curve Comparison for Different Reynolds", fontsize=16)
 
 ### Plotting the Lift Curve ###
 plt.subplot(1, 3, 1)
+plt.ylim(0, 2.2)
 plt.plot(a1, b1, "k")
-plt.xlabel("Angle of Atack [deg]")
+plt.xlabel("Angle of Attack [deg]")
 plt.ylabel("Lift Coefficient")
 plt.grid(True)
-plt.title("Lift Curve, Re=5e4")
+plt.title("Re = 5e4")
 
 ### Plotting the Drag Curve ###
 plt.subplot(1, 3, 2)
+plt.ylim(0, 2.2)
 plt.plot(a2, b2, "k")
-plt.xlabel("Angle of Atack [deg]")
+plt.xlabel("Angle of Attack [deg]")
 plt.ylabel("Lift Coefficient")
 plt.grid(True)
-plt.title("Lift Curve, Re=1e5")
+plt.title("Re = 1e5")
 
-### Plotting the GLide Efficiency Over Angle of Atack ###
+### Plotting the Glide Efficiency ###
 plt.subplot(1, 3, 3)
+plt.ylim(0, 2.2)
 plt.plot(a3, b3, "k")
-plt.xlabel("Angle of Atack [deg]")
+plt.xlabel("Angle of Attack [deg]")
 plt.ylabel("Lift Coefficient")
 plt.grid(True)
-plt.title("Lift Curve, Re=2e5")
+plt.title("Re = 2e5")
 
+plt.tight_layout(rect=[0, 0, 1, 0.95])  # deixa espaço para o título principal
 plt.show()
+
 
 ### Plotting the Lift Curve ###
 plt.plot(alfas, CLs, "k")
