@@ -39,6 +39,10 @@ a1, b1, c1, d1, e1, f1 = read_polar("Airfoils/selig_s1223/s1223_Re_5e4.txt")
 a2, b2, c2, d2, e2, f2 = read_polar("Airfoils/selig_s1223/s1223_Re_1e5.txt")
 a3, b3, c3, d3, e3, f3 = read_polar("Airfoils/selig_s1223/s1223_Re_2e5.txt")
 
+aa1, bb1, cc1, dd1, ee1, ff1 = read_polar("Airfoils/selig_s3021/s3021_Re_50000")
+aa2, bb2, cc2, dd2, ee2, ff2 = read_polar("Airfoils/selig_s3021/s3021_Re_100000")
+aa3, bb3, cc3, dd3, ee3, ff3 = read_polar("Airfoils/selig_s3021/s3021_Re_200000")
+
 a4, b4 = read_polar_inviscid("Airfoils/selig_s1223/s1223_inviscid.txt")
 
 # =======================
@@ -54,30 +58,36 @@ try:
     # mng.window.state('zoomed')   # TkAgg (descomenta se precisares)
 except Exception as e:
     print("Não consegui maximizar automaticamente:", e)
-
 # Subplot 1
-axs[0].plot(a1, b1, "k")
+axs[0].plot(a1, b1, "k", label="Selig S-1223")   # linha preta contínua
+axs[0].plot(aa1, bb1, "--k", label="Selig S-3021")  # linha preta tracejada
 axs[0].set_ylim(0, 2.5)
 axs[0].set_xlabel("Angle of Attack [deg]")
 axs[0].set_ylabel("Lift Coefficient")
 axs[0].grid(True)
 axs[0].set_title("Re = 50 000")
+axs[0].legend()
 
 # Subplot 2
-axs[1].plot(a2, b2, "k")
+axs[1].plot(a2, b2, "k", label="Selig S-1223")
+axs[1].plot(aa2, bb2, "--k", label="Selig S-3021")
 axs[1].set_ylim(0, 2.5)
 axs[1].set_xlabel("Angle of Attack [deg]")
 axs[1].set_ylabel("Lift Coefficient")
 axs[1].grid(True)
 axs[1].set_title("Re = 100 000")
+axs[1].legend()
 
 # Subplot 3
-axs[2].plot(a3, b3, "k")
+axs[2].plot(a3, b3, "k", label="Selig S-1223")
+axs[2].plot(aa3, bb3, "--k", label="Selig S-3021")
 axs[2].set_ylim(0, 2.5)
 axs[2].set_xlabel("Angle of Attack [deg]")
 axs[2].set_ylabel("Lift Coefficient")
 axs[2].grid(True)
 axs[2].set_title("Re = 200 000")
+axs[2].legend()
+
 
 # Ajusta margens para centrar bem
 fig.subplots_adjust(left=0.07, right=0.95, wspace=0.3, top=0.88, bottom=0.1)
