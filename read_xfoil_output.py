@@ -39,9 +39,9 @@ a1, b1, c1, d1, e1, f1 = read_polar("Airfoils/selig_s1223/s1223_Re_5e4.txt")
 a2, b2, c2, d2, e2, f2 = read_polar("Airfoils/selig_s1223/s1223_Re_1e5.txt")
 a3, b3, c3, d3, e3, f3 = read_polar("Airfoils/selig_s1223/s1223_Re_2e5.txt")
 
-aa1, bb1, cc1, dd1, ee1, ff1 = read_polar("Airfoils/selig_s3021/s3021_Re_50000")
-aa2, bb2, cc2, dd2, ee2, ff2 = read_polar("Airfoils/selig_s3021/s3021_Re_100000")
-aa3, bb3, cc3, dd3, ee3, ff3 = read_polar("Airfoils/selig_s3021/s3021_Re_200000")
+aa1, bb1, cc1, dd1, ee1, ff1 = read_polar("Airfoils/mh60/mh60_Re_5e4.txt")
+aa2, bb2, cc2, dd2, ee2, ff2 = read_polar("Airfoils/mh60/mh60_Re_1e5.txt")
+aa3, bb3, cc3, dd3, ee3, ff3 = read_polar("Airfoils/mh60/mh60_Re_2e5.txt")
 
 a4, b4 = read_polar_inviscid("Airfoils/selig_s1223/s1223_inviscid.txt")
 
@@ -60,7 +60,7 @@ except Exception as e:
     print("Não consegui maximizar automaticamente:", e)
 # Subplot 1
 axs[0].plot(a1, b1, "k", label="Selig S-1223")   # linha preta contínua
-axs[0].plot(aa1, bb1, "--k", label="Selig S-3021")  # linha preta tracejada
+axs[0].plot(aa1, bb1, "--k", label="MH60")  # linha preta tracejada
 axs[0].set_ylim(0, 2.5)
 axs[0].set_xlabel("Angle of Attack [deg]")
 axs[0].set_ylabel("Lift Coefficient")
@@ -70,7 +70,7 @@ axs[0].legend()
 
 # Subplot 2
 axs[1].plot(a2, b2, "k", label="Selig S-1223")
-axs[1].plot(aa2, bb2, "--k", label="Selig S-3021")
+axs[1].plot(aa2, bb2, "--k", label="MH60")
 axs[1].set_ylim(0, 2.5)
 axs[1].set_xlabel("Angle of Attack [deg]")
 axs[1].set_ylabel("Lift Coefficient")
@@ -80,7 +80,55 @@ axs[1].legend()
 
 # Subplot 3
 axs[2].plot(a3, b3, "k", label="Selig S-1223")
-axs[2].plot(aa3, bb3, "--k", label="Selig S-3021")
+axs[2].plot(aa3, bb3, "--k", label="MH60")
+axs[2].set_ylim(0, 2.5)
+axs[2].set_xlabel("Angle of Attack [deg]")
+axs[2].set_ylabel("Lift Coefficient")
+axs[2].grid(True)
+axs[2].set_title("Re = 200 000")
+axs[2].legend()
+
+
+# Ajusta margens para centrar bem
+fig.subplots_adjust(left=0.07, right=0.95, wspace=0.3, top=0.88, bottom=0.1)
+
+plt.savefig("Lift_Curves")
+plt.show()
+
+
+fig, axs = plt.subplots(1, 3)
+fig.suptitle("Lift Curve Comparison for Different Reynolds", fontsize=16)
+
+# Maximizar a janela automaticamente
+try:
+    mng = plt.get_current_fig_manager()
+    mng.window.showMaximized()     # Qt5Agg
+    # mng.window.state('zoomed')   # TkAgg (descomenta se precisares)
+except Exception as e:
+    print("Não consegui maximizar automaticamente:", e)
+# Subplot 1
+axs[0].plot(c1, b1, "k", label="Selig S-1223")   # linha preta contínua
+axs[0].plot(cc1, bb1, "--k", label="MH60")  # linha preta tracejada
+axs[0].set_ylim(0, 2.5)
+axs[0].set_xlabel("Angle of Attack [deg]")
+axs[0].set_ylabel("Lift Coefficient")
+axs[0].grid(True)
+axs[0].set_title("Re = 50 000")
+axs[0].legend()
+
+# Subplot 2
+axs[1].plot(c2, b2, "k", label="Selig S-1223")
+axs[1].plot(cc2, bb2, "--k", label="MH60")
+axs[1].set_ylim(0, 2.5)
+axs[1].set_xlabel("Angle of Attack [deg]")
+axs[1].set_ylabel("Lift Coefficient")
+axs[1].grid(True)
+axs[1].set_title("Re = 100 000")
+axs[1].legend()
+
+# Subplot 3
+axs[2].plot(c3, b3, "k", label="Selig S-1223")
+axs[2].plot(cc3, bb3, "--k", label="MH60")
 axs[2].set_ylim(0, 2.5)
 axs[2].set_xlabel("Angle of Attack [deg]")
 axs[2].set_ylabel("Lift Coefficient")
@@ -110,6 +158,7 @@ except Exception as e:
 
 # Subplot 1
 axs[0].plot(a1, c1, "k")
+axs[0].plot(aa1, cc1, "--k")
 axs[0].set_ylim(0, 0.15)
 axs[0].set_xlabel("Angle of Attack [deg]")
 axs[0].set_ylabel("Drag Coefficient")
@@ -118,6 +167,7 @@ axs[0].set_title("Re = 50 000")
 
 # Subplot 2
 axs[1].plot(a2, c2, "k")
+axs[1].plot(aa2, cc2, "--k")
 axs[1].set_ylim(0, 0.15)
 axs[1].set_xlabel("Angle of Attack [deg]")
 axs[1].set_ylabel("Drag Coefficient")
@@ -126,6 +176,7 @@ axs[1].set_title("Re = 100 000")
 
 # Subplot 3
 axs[2].plot(a3, c3, "k")
+axs[2].plot(aa3, cc3, "--k")
 axs[2].set_ylim(0, 0.15)
 axs[2].set_xlabel("Angle of Attack [deg]")
 axs[2].set_ylabel("Drag Coefficient")
@@ -155,6 +206,7 @@ except Exception as e:
 
 # Subplot 1
 axs[0].plot(a1, f1, "k")
+axs[0].plot(aa1, ff1, "--k")
 axs[0].set_ylim(0, 100)
 axs[0].set_xlabel("Angle of Attack [deg]")
 axs[0].set_ylabel("L/D Ratio")
@@ -163,6 +215,7 @@ axs[0].set_title("Re = 50 000")
 
 # Subplot 2
 axs[1].plot(a2, f2, "k")
+axs[1].plot(aa2, ff2, "--k")
 axs[1].set_ylim(0, 100)
 axs[1].set_xlabel("Angle of Attack [deg]")
 axs[1].set_ylabel("L/D Ratio")
@@ -171,6 +224,7 @@ axs[1].set_title("Re = 100 000")
 
 # Subplot 3
 axs[2].plot(a3, f3, "k")
+axs[2].plot(aa3, ff3, "--k")
 axs[2].set_ylim(0, 100)
 axs[2].set_xlabel("Angle of Attack [deg]")
 axs[2].set_ylabel("L/D Ratio")
