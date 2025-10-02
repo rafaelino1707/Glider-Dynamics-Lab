@@ -26,6 +26,7 @@ class Glider:
         """
         V_min_sink ≈ sqrt(2/rho) * (K/CD0)^(1/4) * sqrt(W/S)
         """
+        
         W = self.mass * 9.81  # Newtons
         term_1 = math.sqrt(2 / rho)
         term_2 = (self.induced_drag_factor / self.cd0) ** 0.25
