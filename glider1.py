@@ -71,6 +71,13 @@ class Glider:
             "glide_ratio": glide_ratio
         }
 
+    def stall_velocity(self, CL_max, rho=1.225):
+        W = self.mass * 9.81
+        
+        S = self.wing_area
+
+        return ((2*W)/(rho*S*CL_max))
+    
 # --- exemplo com os teus valores ---
 glider = Glider(
     mass=0.3,              # kg
@@ -92,3 +99,5 @@ print("CD:", sink_info["CD"])
 print("Arrasto D (N):", sink_info["D_N"])
 print("Taxa de sink vertical (m/s):", sink_info["sink_rate_m_s"])
 print("Glide ratio (L/D):", sink_info["glide_ratio"])
+
+print(f'Stall Velocity: {glider.stall_velocity(2)} m/s')
