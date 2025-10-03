@@ -1,58 +1,205 @@
-# lift_estimates.py
+"""
+Glider optimization / grid sweep script
+
+Escolhe ranges de chord/span e várias quantidades de PLA (ou massas reservadas) e
+calcula Vmin, sink rate e glide ratio para cada combinação.
+
+Requisitos: Python 3.8+, numpy, pandas, matplotlib
+
+Uso:
+  - Abra este ficheiro num Jupyter Notebook ou execute como script:
+      python glider_optimization.py
+  - Edite os parâmetros no bloco SETTINGS para explorar outras ranges.
+
+Saídas:
+  - CSV com todas as combinações e métricas
+  - Heatmaps (PNG) para cada valor de PLA_total definido
+  - Console com top combos por menor sink rate e menor Vmin
+
+Notas:
+  - Modelo simplificado (CD = CD0 + K*CL^2, K = 1/(pi*AR*e)).
+  - Wing mass estimada como duas cascas (top+bottom) com espessura thickness_m.
+  - Ajusta "reserved_mass_kg" para representar fuselagem + eletrónica.
+
+"""
+
 import math
-import aerosandbox as asb
 import numpy as np
-from aerosandbox.aerodynamics.aero_2D.xfoil import XFoil
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
+from datetime import datetime
 
-# constantes
-rho = 1.225
-mu = 1.81e-5
-g = 9.81
+# -------------------------- CLASSES / FUNÇÕES -------------------------------
+class Glider:
+    def __init__(self, mass_kg, chord_m, wingspan_m, oswald_efficiency=0.75, cd0=0.04):
+        self.mass = mass_kg
+        self.chord = chord_m
+        self.wingspan = wingspan_m
+        self.oswald_efficiency = oswald_efficiency
+        self.cd0 = cd0
 
-# parâmetros do teu planeador (exemplo; adapta)
-m = 1.0            # kg
-W = m * g
-S = 0.25           # m^2 (altera para o teu valor)
-b = 1.5            # m (envergadura)
-c = S / b          # corda média
-AR = b**2 / S
+    @property
+    def wing_area(self):
+        return max(self.chord * self.wingspan, 1e-12)
 
-# alpha em graus para testar
-alpha_deg = 5.0
-alpha_rad = math.radians(alpha_deg)
+    @property
+    def aspect_ratio(self):
+        return (self.wingspan ** 2) / self.wing_area
 
-# 1) thin airfoil (2D) -> CL per rad ~= 2*pi
-CL2d_thin = 2 * math.pi * alpha_rad
-print("Thin-airfoil CL (2D) at", alpha_deg, "deg:", CL2d_thin)
+    @property
+    def induced_drag_factor(self):
+        return 1.0 / (math.pi * self.aspect_ratio * self.oswald_efficiency)
 
-# 2) lifting-line approx -> wing lift slope
-e = 0.9  # eficiência de Oswald aproximada
-a_wing = (2 * math.pi * AR) / (2 + AR / e)  # per rad
-CL_wing_from_thin = a_wing * alpha_rad
-print("Lifting-line approx CL (wing) at", alpha_deg, "deg:", CL_wing_from_thin)
+    def minimum_sink_velocity(self, rho=1.225):
+        W = self.mass * 9.81
+        term_1 = math.sqrt(2 / rho)
+        term_2 = (self.induced_drag_factor / self.cd0) ** 0.25
+        term_3 = math.sqrt(W / self.wing_area)
+        return term_1 * term_2 * term_3
 
-# 3) CL required (para verificar velocidade)
-V_from_CL = math.sqrt(2 * W / (rho * S * CL_wing_from_thin))
-Re_est = rho * V_from_CL * c / mu
-Mach_est = V_from_CL / 340.0
-print(f"Estimated V (m/s) = {V_from_CL:.2f}, Re = {Re_est:.2e}, Mach = {Mach_est:.3f}")
+    def vertical_sink_rate(self, V=None, rho=1.225):
+        W = self.mass * 9.81
+        S = self.wing_area
+        if V is None:
+            V = self.minimum_sink_velocity(rho=rho)
+        CL = W / (0.5 * rho * V ** 2 * S)
+        K = self.induced_drag_factor
+        CD = self.cd0 + K * CL ** 2
+        D = 0.5 * rho * V ** 2 * S * CD
+        sink_rate = V * (D / W)
+        glide_ratio = (W / D) if D > 0 else float('inf')
+        return {
+            'V_used': V,
+            'CL': CL,
+            'CD': CD,
+            'D_N': D,
+            'sink_rate_m_s': sink_rate,
+            'glide_ratio': glide_ratio
+        }
 
-# 4) AeroSandbox: NeuralFoil quick estimate (se disponível)
-af = asb.Airfoil("s3021-il")  # nome compatível com AeroSandbox
-try:
-    neural = af.get_aero_from_neuralfoil(alpha=alpha_deg, Re=Re_est)
-    print("NeuralFoil estimate:", neural)
-except Exception as e:
-    print("NeuralFoil failed:", e)
 
-# 5) AeroSandbox XFoil viscous run (requires xfoil binary accessible or download)
-xf = XFoil()
-xf.Re = Re_est
-xf.max_iter = 200
-try:
-    res = xf.alpha(af, alpha=alpha_deg)   # roda XFoil viscous
-    print("XFoil viscous result:", res)
-except Exception as e:
-    print("XFoil viscous failed (check xfoil available):", e)
+def wing_mass_from_shell(chord_m, span_m, thickness_m=0.002, rho_pla=1240.0):
+    """Calcula massa total das duas asas assumindo duas cascas (top+bottom)"""
+    wing_area = chord_m * span_m
+    total_shell_area = 2.0 * wing_area
+    wing_volume = total_shell_area * thickness_m
+    return wing_volume * rho_pla
 
-# Nota: adapta S, b, m conforme o teu projeto
+
+# ----------------------------- SETTINGS ------------------------------------
+# Ajusta aqui as ranges e parametros
+OUTPUT_DIR = 'glider_results'
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# Ranges
+chord_vals = np.linspace(0.02, 0.10, 41)   # corda: 2 cm a 10 cm
+span_vals = np.linspace(0.45, 0.85, 41)    # span: 0.45 m a 0.85 m
+
+# Experimenta vários totais de PLA (kg) — isto simula diferentes quantidades de material
+PLA_total_list = [0.8, 1.0, 1.2]  # kg
+
+# Reserva para fuselagem + eletrónica (kg). Podes também passar uma lista se quiseres varrer.
+reserved_mass_kg = 0.36  # 360 g
+
+# Materiais e outros parâmetros
+rho_PLA = 1240.0  # kg/m^3
+thickness_m = 0.002  # 2 mm
+oswald_efficiency = 0.75
+cd0 = 0.04
+rho_air = 1.225
+
+# ---------------------------------------------------------------------------
+all_results = []
+
+for PLA_total in PLA_total_list:
+    print('\n=== Running sweep for PLA_total =', PLA_total, 'kg ===')
+
+    for chord in chord_vals:
+        for span in span_vals:
+            wing_mass = wing_mass_from_shell(chord, span, thickness_m=thickness_m, rho_pla=rho_PLA)
+            feasible = (wing_mass + reserved_mass_kg) <= PLA_total
+            total_mass = wing_mass + reserved_mass_kg
+
+            if feasible:
+                g = Glider(total_mass, chord, span, oswald_efficiency=oswald_efficiency, cd0=cd0)
+                try:
+                    Vmin = g.minimum_sink_velocity(rho=rho_air)
+                    sink = g.vertical_sink_rate(V=Vmin, rho=rho_air)
+                    sink_rate = sink['sink_rate_m_s']
+                    glide_ratio = sink['glide_ratio']
+                except Exception:
+                    Vmin = np.nan
+                    sink_rate = np.nan
+                    glide_ratio = np.nan
+            else:
+                Vmin = np.nan
+                sink_rate = np.nan
+                glide_ratio = np.nan
+
+            all_results.append({
+                'PLA_total_kg': PLA_total,
+                'reserved_mass_kg': reserved_mass_kg,
+                'chord_m': chord,
+                'span_m': span,
+                'wing_area_m2': chord * span,
+                'wing_mass_kg': wing_mass,
+                'feasible': feasible,
+                'total_mass_kg': total_mass,
+                'Vmin_m_s': Vmin,
+                'sink_rate_m_s': sink_rate,
+                'glide_ratio': glide_ratio
+            })
+
+# Save dataframe
+df = pd.DataFrame(all_results)
+now = datetime.now().strftime('%Y%m%d_%H%M%S')
+csv_path = os.path.join(OUTPUT_DIR, f'glider_sweep_{now}.csv')
+df.to_csv(csv_path, index=False)
+print('\nSaved CSV with all results to:', csv_path)
+
+# For cada PLA_total, criar heatmap e listar top combos
+for PLA_total in sorted(df['PLA_total_kg'].unique()):
+    sub = df[df['PLA_total_kg'] == PLA_total].copy()
+    feasible = sub[sub['feasible']]
+
+    if feasible.empty:
+        print('No feasible combos for PLA_total =', PLA_total)
+        continue
+
+    # Pivot para heatmap
+    pivot = feasible.pivot_table(index='chord_m', columns='span_m', values='sink_rate_m_s', aggfunc='mean')
+
+    plt.figure(figsize=(8,6))
+    plt.imshow(pivot.values, origin='lower', aspect='auto',
+               extent=[pivot.columns.min(), pivot.columns.max(), pivot.index.min(), pivot.index.max()])
+    plt.xlabel('Span (m)')
+    plt.ylabel('Chord (m)')
+    plt.title(f'Sink rate mínimo (m/s) — PLA_total={PLA_total} kg')
+    cbar = plt.colorbar()
+    cbar.set_label('sink rate (m/s)')
+    plt.tight_layout()
+    png_path = os.path.join(OUTPUT_DIR, f'heatmap_sinkrate_PLA{PLA_total}_{now}.png')
+    plt.savefig(png_path, dpi=200)
+    plt.close()
+    print('Saved heatmap to', png_path)
+
+    # Top combos
+    top_sink = feasible.nsmallest(10, 'sink_rate_m_s')
+    top_vmin = feasible.nsmallest(10, 'Vmin_m_s')
+    print('\nPLA_total =', PLA_total)
+    print('Top 5 (menor sink rate):')
+    print(top_sink[['chord_m','span_m','wing_mass_kg','total_mass_kg','Vmin_m_s','sink_rate_m_s','glide_ratio']].head(5).to_string(index=False))
+
+    print('\nTop 5 (menor Vmin):')
+    print(top_vmin[['chord_m','span_m','wing_mass_kg','total_mass_kg','Vmin_m_s','sink_rate_m_s','glide_ratio']].head(5).to_string(index=False))
+
+print('\nDone. Checa a pasta', OUTPUT_DIR, 'para CSVs e imagens.')
+
+# ---------------------------- Sugestões de exploração -----------------------
+# - Ajusta reserved_mass_kg para refletir melhor a tua eletrónica/bateria.
+# - Experimenta outras values para oswald_efficiency e cd0 (melhor perfil/forma reduz CD0).
+# - Se quiseres um otimizador (ex: minimizar sink_rate + lambda*Vmin) posso adicionar
+#   uma rotina usando differential evolution (scipy) ou um grid search mais fino sobre
+#   uma região de interesse.
+# ---------------------------------------------------------------------------
