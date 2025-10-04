@@ -1,245 +1,267 @@
-"""
-Glider optimization / grid sweep script (updated)
-
-Este script varre PLA_total de 1.0 kg até 0.1 kg com passo 0.1 kg e gera:
- - heatmaps para sink_rate e Vmin
- - mapas combinados (objetivo normalizado)
- - scatter Vmin vs sink_rate com fronteira de Pareto
- - fatiamentos (slices) de Vmin e sink_rate para cordas selecionadas
-
-Parâmetros no bloco SETTINGS. Use num Jupyter Notebook ou execute como script.
-"""
-
-import math
-import os
+# heatmaps_multiCL_fixed.py
+import math, os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from datetime import datetime
 
+# ----------------------------- Glider class --------------------------------
 class Glider:
-    def __init__(self, mass_kg, chord_m, wingspan_m, oswald_efficiency=0.75, cd0=0.04):
+    def __init__(self, mass_kg, chord_m, span_m, CLmax, oswald_efficiency=0.75, cd0=0.04):
         self.mass = mass_kg
         self.chord = chord_m
-        self.wingspan = wingspan_m
-        self.oswald_efficiency = oswald_efficiency
+        self.span = span_m
+        self.CLmax = CLmax
+        self.e = oswald_efficiency
         self.cd0 = cd0
 
     @property
     def wing_area(self):
-        return max(self.chord * self.wingspan, 1e-12)
+        return max(self.chord * self.span, 1e-12)
 
     @property
     def aspect_ratio(self):
-        return (self.wingspan ** 2) / self.wing_area
+        S = self.wing_area
+        return (self.span ** 2) / S
 
     @property
     def induced_drag_factor(self):
-        return 1.0 / (math.pi * self.aspect_ratio * self.oswald_efficiency)
+        AR = self.aspect_ratio
+        return 1.0 / (math.pi * AR * self.e)
 
-    def minimum_sink_velocity(self, rho=1.225):
-        W = self.mass * 9.81
-        term_1 = math.sqrt(2 / rho)
-        term_2 = (self.induced_drag_factor / self.cd0) ** 0.25
-        term_3 = math.sqrt(W / self.wing_area)
-        return term_1 * term_2 * term_3
-
-    def vertical_sink_rate(self, V=None, rho=1.225):
+    def Vmin_theoretical(self, rho=1.225):
         W = self.mass * 9.81
         S = self.wing_area
-        if V is None:
-            V = self.minimum_sink_velocity(rho=rho)
-        CL = W / (0.5 * rho * V ** 2 * S)
         K = self.induced_drag_factor
-        CD = self.cd0 + K * CL ** 2
-        D = 0.5 * rho * V ** 2 * S * CD
-        sink_rate = V * (D / W)
-        glide_ratio = (W / D) if D > 0 else float('inf')
-        return {
-            'V_used': V,
-            'CL': CL,
-            'CD': CD,
-            'D_N': D,
-            'sink_rate_m_s': sink_rate,
-            'glide_ratio': glide_ratio
-        }
+        return math.sqrt(2.0 / rho) * (K / self.cd0)**0.25 * math.sqrt(W / S)
 
+    def sink_at_V(self, V, rho=1.225):
+        W = self.mass * 9.81
+        S = self.wing_area
+        CL = W / (0.5 * rho * V**2 * S)
+        K = self.induced_drag_factor
+        CD = self.cd0 + K * CL**2
+        D = 0.5 * rho * V**2 * S * CD
+        sink = V * (D / W)
+        glide = (W / D) if D > 0 else float('nan')
+        return {"V": V, "CL": CL, "CD": CD, "D": D, "sink": sink, "glide": glide}
 
-def wing_mass_from_shell(chord_m, span_m, thickness_m=0.002, rho_pla=1240.0):
-    wing_area = chord_m * span_m
-    total_shell_area = 2.0 * wing_area
-    wing_volume = total_shell_area * thickness_m
-    return wing_volume * rho_pla
+    def Vstall(self, rho=1.225):
+        W = self.mass * 9.81
+        S = self.wing_area
+        return math.sqrt((2.0 * W) / (rho * S * self.CLmax))
 
-# ------------------------- SETTINGS ---------------------------------------
-chord_vals = np.linspace(0.02, 0.10, 41)   # corda: 2 cm a 10 cm
-span_vals = np.linspace(0.45, 0.85, 41)    # span: 0.45 a 0.85 m
+# ----------------------------- Settings ------------------------------------
+# grid (ajusta se precisares)
+chord_vals = np.linspace(0.02, 0.15, 41)   # corda 2cm->15cm
+span_vals  = np.linspace(0.5, 1.5, 41)     # span 0.5->1.5 m
+masses = np.round(np.arange(0.1, 1.01, 0.1), 2)
 
-# PLA_total de 1.0 kg até 0.1 kg com passo 0.1 kg
-PLA_total_list = np.round(np.arange(1.0, 0.0, -0.1), 2)
-PLA_total_list = [p for p in PLA_total_list if p >= 0.1]
+# aerodynamics
+CL_MAX_DEFAULT = 1.2   # used for baseline Vmin/sink
+OSWALD_EFF = 0.75
+CD0 = 0.04
+RHO = 1.225
 
-reserved_mass_kg = 0.36  # reserva fixa (ajusta se quiseres)
+# lista dos 4 airfoils (CL_max para cada um) - substitui pelos teus valores reais
+CL_LIST = [0.9, 1.2, 1.5, 1.8]
 
-rho_PLA = 1240.0
-thickness_m = 0.002
-oswald_efficiency = 0.75
-cd0 = 0.04
-rho_air = 1.225
+# colors for contour lines (one per CL)
+overlay_line_colors = ['#d73027', '#f46d43', '#fdae61', '#fee08b']  # contrastantes (vermelho -> amarelo)
+line_width = 1.6
 
-lambda_weight = 0.5  # peso relativo entre Vmin_norm e sink_norm
+# base cmap and global scale control
+BASE_CMAP = 'inferno'   # bom contraste vermelho->amarelo
 
-# Dir de saída
+# output dir
 now = datetime.now().strftime('%Y%m%d_%H%M%S')
-out_dir = f'glider_opt_outputs_{now}'
+out_dir = f'heatmaps_multiCL_fixed_{now}'
 os.makedirs(out_dir, exist_ok=True)
+sink_dir   = os.path.join(out_dir, 'sink_heatmaps')
+vmin_dir   = os.path.join(out_dir, 'vmin_heatmaps')
+vstall_dir = os.path.join(out_dir, 'vstall_multiCL_lines')
+os.makedirs(sink_dir, exist_ok=True)
+os.makedirs(vmin_dir, exist_ok=True)
+os.makedirs(vstall_dir, exist_ok=True)
 
-# ----------------------- GRID SWEEP --------------------------------------
-results = []
-for PLA_total in PLA_total_list:
+# ---------------------------- Compute base grids ---------------------------
+print("Computing grid for masses:", masses)
+rows = []
+for mass in masses:
     for chord in chord_vals:
         for span in span_vals:
-            wing_mass = wing_mass_from_shell(chord, span, thickness_m=thickness_m, rho_pla=rho_PLA)
-            feasible = (wing_mass + reserved_mass_kg) <= PLA_total
-            total_mass = wing_mass + reserved_mass_kg
-
-            if feasible:
-                g = Glider(total_mass, chord, span, oswald_efficiency=oswald_efficiency, cd0=cd0)
-                Vmin = g.minimum_sink_velocity(rho=rho_air)
-                sink = g.vertical_sink_rate(V=Vmin, rho=rho_air)
-                sink_rate = sink['sink_rate_m_s']
-                glide_ratio = sink['glide_ratio']
-            else:
-                Vmin = np.nan
-                sink_rate = np.nan
-                glide_ratio = np.nan
-
-            results.append({
-                'PLA_total_kg': PLA_total,
-                'reserved_mass_kg': reserved_mass_kg,
- 'chord_m': chord,
-                'span_m': span,
-                'wing_area_m2': chord*span,
-                'wing_mass_kg': wing_mass,
-                'feasible': feasible,
-                'total_mass_kg': total_mass,
-                'Vmin_m_s': Vmin,
-                'sink_rate_m_s': sink_rate,
-                'glide_ratio': glide_ratio
+            g = Glider(mass, chord, span, CLmax=CL_MAX_DEFAULT, oswald_efficiency=OSWALD_EFF, cd0=CD0)
+            Vmin = g.Vmin_theoretical(rho=RHO)
+            sink_info = g.sink_at_V(Vmin, rho=RHO)
+            rows.append({
+                "mass": mass,     # consistent column name 'mass'
+                "chord": chord,   # consistent 'chord'
+                "span": span,     # consistent 'span'
+                "Vmin": Vmin,
+                "sink": sink_info["sink"]
             })
+df_base = pd.DataFrame(rows)
 
-df = pd.DataFrame(results)
-df_feas = df[df['feasible']].copy()
+# precompute Vstall for each CL in CL_LIST (store in dict of dataframes)
+vstall_dict = {}
+for CLval in CL_LIST:
+    rows_vs = []
+    for mass in masses:
+        for chord in chord_vals:
+            for span in span_vals:
+                g = Glider(mass, chord, span, CLmax=CLval, oswald_efficiency=OSWALD_EFF, cd0=CD0)
+                rows_vs.append({
+                    "mass": mass,   # same column name 'mass'
+                    "chord": chord,
+                    "span": span,
+                    "Vstall": g.Vstall(rho=RHO),
+                    "CLmax": CLval
+                })
+    vstall_dict[CLval] = pd.DataFrame(rows_vs)
 
-# Normalizar por grupo PLA_total
-df_feas['Vmin_norm'] = df_feas.groupby(['PLA_total_kg'])['Vmin_m_s'].transform(lambda x: (x - x.min())/(x.max()-x.min()) if x.max()!=x.min() else 0.0)
-df_feas['sink_norm'] = df_feas.groupby(['PLA_total_kg'])['sink_rate_m_s'].transform(lambda x: (x - x.min())/(x.max()-x.min()) if x.max()!=x.min() else 0.0)
-df_feas['combined_obj'] = lambda_weight * df_feas['Vmin_norm'] + (1-lambda_weight) * df_feas['sink_norm']
+# compute global vmin/vmax for consistent color scaling
+global_vmin_vmin = df_base['Vmin'].min()
+global_vmax_vmin = df_base['Vmin'].max()
+global_vmin_sink = df_base['sink'].min()
+global_vmax_sink = df_base['sink'].max()
 
-# Pareto
-def pareto_front(df_sub):
-    pts = df_sub[['Vmin_m_s','sink_rate_m_s']].dropna().values
-    idxs = []
-    for i,p in enumerate(pts):
-        dominated = False
-        for j,q in enumerate(pts):
-            if j==i: continue
-            if (q[0] <= p[0] and q[1] <= p[1]) and (q[0] < p[0] or q[1] < p[1]):
-                dominated = True
-                break
-        if not dominated:
-            idxs.append(i)
-    df_nonan = df_sub[['Vmin_m_s','sink_rate_m_s']].dropna().reset_index()
-    pareto_indexes = df_nonan.loc[idxs,'index'].values
-    return pareto_indexes
+print("Global Vmin range:", global_vmin_vmin, "->", global_vmax_vmin)
+print("Global sink range:", global_vmin_sink, "->", global_vmax_sink)
 
-# ------------------- Outputs: heatmaps + plots ----------------------------
-summary_rows = []
-for PLA_total, group in df_feas.groupby('PLA_total_kg'):
+# ---------------------------- Plot per mass --------------------------------
+for mass, group in df_base.groupby('mass'):
+    print(f"Plotting mass {mass} kg ...")
     sub = group.copy()
-    pivot_sink = sub.pivot_table(index='chord_m', columns='span_m', values='sink_rate_m_s', aggfunc='mean')
-    pivot_vmin = sub.pivot_table(index='chord_m', columns='span_m', values='Vmin_m_s', aggfunc='mean')
-    pivot_comb = sub.pivot_table(index='chord_m', columns='span_m', values='combined_obj', aggfunc='mean')
+    # pivot table index=chord, columns=span (names match df_base)
+    pivot_sink = sub.pivot_table(index='chord', columns='span', values='sink', aggfunc='mean')
+    pivot_vmin = sub.pivot_table(index='chord', columns='span', values='Vmin', aggfunc='mean')
 
-    # Heatmaps
-    plt.figure(figsize=(7,5))
-    plt.imshow(pivot_sink.values, origin='lower', aspect='auto', extent=[pivot_sink.columns.min(), pivot_sink.columns.max(), pivot_sink.index.min(), pivot_sink.index.max()])
-    plt.xlabel('Span (m)'); plt.ylabel('Chord (m)')
-    plt.title(f'Sink rate (m/s) — PLA={PLA_total}kg')
-    plt.colorbar().set_label('sink rate (m/s)')
-    plt.tight_layout()
-    plt.savefig(os.path.join(out_dir, f'heat_sink_PLA{PLA_total}.png'), dpi=200)
-    plt.close()
+    X = pivot_sink.columns.values
+    Y = pivot_sink.index.values
+    extent = [X.min(), X.max(), Y.min(), Y.max()]
 
-    plt.figure(figsize=(7,5))
-    plt.imshow(pivot_vmin.values, origin='lower', aspect='auto', extent=[pivot_vmin.columns.min(), pivot_vmin.columns.max(), pivot_vmin.index.min(), pivot_vmin.index.max()])
-    plt.xlabel('Span (m)'); plt.ylabel('Chord (m)')
-    plt.title(f'Vmin (m/s) — PLA={PLA_total}kg')
-    plt.colorbar().set_label('Vmin (m/s)')
-    plt.tight_layout()
-    plt.savefig(os.path.join(out_dir, f'heat_vmin_PLA{PLA_total}.png'), dpi=200)
-    plt.close()
+    # ---- sink heatmap (with Vmin contours white) ----
+    fig, ax = plt.subplots(figsize=(7,5))
+    im = ax.imshow(pivot_sink.values, origin='lower', aspect='auto', extent=extent,
+                   cmap=BASE_CMAP, vmin=global_vmin_sink, vmax=global_vmax_sink)
+    ax.set_title(f'sink_rate (m/s) @ Vmin — mass={mass} kg')
+    ax.set_xlabel('Span (m)'); ax.set_ylabel('Chord (m)')
+    cbar = fig.colorbar(im, ax=ax); cbar.set_label('sink (m/s)')
 
-    plt.figure(figsize=(7,5))
-    plt.imshow(pivot_comb.values, origin='lower', aspect='auto', extent=[pivot_comb.columns.min(), pivot_comb.columns.max(), pivot_comb.index.min(), pivot_comb.index.max()])
-    plt.xlabel('Span (m)'); plt.ylabel('Chord (m)')
-    plt.title(f'Combined obj (lambda={lambda_weight}) — PLA={PLA_total}kg')
-    plt.colorbar().set_label('combined objective (norm)')
-    plt.tight_layout()
-    plt.savefig(os.path.join(out_dir, f'heat_comb_PLA{PLA_total}.png'), dpi=200)
-    plt.close()
+    # Vmin contours (white) - few levels for clarity
+    try:
+        levels_vmin = np.linspace(np.nanmin(pivot_vmin.values), np.nanmax(pivot_vmin.values), 6)
+        CSv = ax.contour(X, Y, pivot_vmin.values, levels=levels_vmin, colors='white', linewidths=0.8)
+        ax.clabel(CSv, inline=True, fontsize=8, fmt='%.1f', colors='white')
+    except Exception:
+        pass
 
-    # Pareto scatter
-    plt.figure(figsize=(6,5))
-    plt.scatter(sub['Vmin_m_s'], sub['sink_rate_m_s'], s=10)
-    pareto_idx = pareto_front(sub)
-    if len(pareto_idx) > 0:
-        pareto = sub.loc[pareto_idx]
-        plt.scatter(pareto['Vmin_m_s'], pareto['sink_rate_m_s'], s=40)
-        pareto_sorted = pareto.sort_values('Vmin_m_s')
-        plt.plot(pareto_sorted['Vmin_m_s'], pareto_sorted['sink_rate_m_s'])
-    plt.xlabel('Vmin (m/s)'); plt.ylabel('sink_rate (m/s)')
-    plt.title(f'Pareto front — PLA={PLA_total}kg')
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(os.path.join(out_dir, f'pareto_PLA{PLA_total}.png'), dpi=200)
-    plt.close()
+    fname = os.path.join(sink_dir, f'heat_sink_mass{mass:.1f}.png')
+    fig.savefig(fname, dpi=200, bbox_inches='tight')
+    plt.close(fig)
 
-    # Slices: para algumas cordas de interesse, plot Vmin & sink vs span
-    chord_slices = [0.025, 0.05, 0.075, 0.1]
-    for chord_val in chord_slices:
-        slice_df = sub[np.isclose(sub['chord_m'], chord_val)]
-        if slice_df.empty:
-            continue
-        slice_sorted = slice_df.sort_values('span_m')
-        plt.figure()
-        plt.plot(slice_sorted['span_m'], slice_sorted['Vmin_m_s'], marker='x')
-        plt.xlabel('Span (m)'); plt.ylabel('Vmin (m/s)')
-        plt.title(f'Vmin vs span — chord={chord_val} m PLA={PLA_total}kg')
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(os.path.join(out_dir, f'Vmin_vs_span_chord{int(chord_val*1000)}_PLA{PLA_total}.png'), dpi=200)
-        plt.close()
+    # ---- vmin heatmap (with sink contours black) ----
+    fig, ax = plt.subplots(figsize=(7,5))
+    im = ax.imshow(pivot_vmin.values, origin='lower', aspect='auto', extent=extent,
+                   cmap=BASE_CMAP, vmin=global_vmin_vmin, vmax=global_vmax_vmin)
+    ax.set_title(f'Vmin_theoretical (m/s) — mass={mass} kg')
+    ax.set_xlabel('Span (m)'); ax.set_ylabel('Chord (m)')
+    cbar = fig.colorbar(im, ax=ax); cbar.set_label('Vmin (m/s)')
+    try:
+        levels_sink = np.linspace(np.nanmin(pivot_sink.values), np.nanmax(pivot_sink.values), 6)
+        CSs = ax.contour(X, Y, pivot_sink.values, levels=levels_sink, colors='black', linewidths=0.8)
+        ax.clabel(CSs, inline=True, fontsize=8, fmt='%.2f', colors='black')
+    except Exception:
+        pass
+    fname = os.path.join(vmin_dir, f'heat_vmin_mass{mass:.1f}.png')
+    fig.savefig(fname, dpi=200, bbox_inches='tight')
+    plt.close(fig)
 
-        plt.figure()
-        plt.plot(slice_sorted['span_m'], slice_sorted['sink_rate_m_s'], marker='x')
-        plt.xlabel('Span (m)'); plt.ylabel('sink_rate (m/s)')
-        plt.title(f'sink_rate vs span — chord={chord_val} m PLA={PLA_total}kg')
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(os.path.join(out_dir, f'sink_vs_span_chord{int(chord_val*1000)}_PLA{PLA_total}.png'), dpi=200)
-        plt.close()
+import math
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
-    # Top combos
-    top_comb = sub.nsmallest(12, 'combined_obj')[['chord_m','span_m','wing_mass_kg','total_mass_kg','Vmin_m_s','sink_rate_m_s','glide_ratio','combined_obj']]
-    top_comb['PLA_total_kg'] = PLA_total
-    summary_rows.append(top_comb)
-    print(f'Outputs OK for PLA_total = {PLA_total} kg')
+# ---------------- Glider class ----------------
+class Glider:
+    def __init__(self, mass_kg, chord_m, span_m, CLmax, oswald_efficiency=0.75, cd0=0.04):
+        self.mass = mass_kg
+        self.chord = chord_m
+        self.span = span_m
+        self.CLmax = CLmax
+        self.e = oswald_efficiency
+        self.cd0 = cd0
 
-summary_df = pd.concat(summary_rows, ignore_index=True)
-summary_df_sorted = summary_df.sort_values(['combined_obj','PLA_total_kg']).reset_index(drop=True)
-summary_csv = os.path.join(out_dir, f'glider_opt_summary_{now}.csv')
-summary_df_sorted.to_csv(summary_csv, index=False)
+    @property
+    def wing_area(self):
+        return max(self.chord * self.span, 1e-12)
 
-print('\nDone. Files saved in:', out_dir)
-print('Summary CSV:', summary_csv)
+    def Vstall(self, rho=1.225):
+        W = self.mass * 9.81
+        S = self.wing_area
+        return math.sqrt((2.0 * W) / (rho * S * self.CLmax))
+
+# ---------------- Settings ----------------
+chord_vals = np.linspace(0.02, 0.15, 80)
+span_vals  = np.linspace(0.5, 1.5, 80)
+
+MASS = 0.2
+CL_LIST = [0.9, 1.2, 1.5, 1.8]
+RHO = 1.225
+
+# ---------------- Compute ----------------
+rows = []
+for chord in chord_vals:
+    for span in span_vals:
+        for CL in CL_LIST:
+            g = Glider(MASS, chord, span, CL)
+            Vstall = g.Vstall(rho=RHO)
+            rows.append({"mass": MASS, "chord": chord, "span": span, "CLmax": CL, "Vstall": Vstall})
+
+df = pd.DataFrame(rows)
+
+# ---------------- Plot ----------------
+fig, ax = plt.subplots(figsize=(7,5))
+
+# fundo com Vstall mínimo (em cinza)
+pivot_min = df.groupby(["chord","span"])["Vstall"].min().unstack()
+X, Y = np.meshgrid(pivot_min.columns.values, pivot_min.index.values)
+im = ax.imshow(pivot_min.values, origin='lower', aspect='auto',
+               extent=[span_vals.min(), span_vals.max(), chord_vals.min(), chord_vals.max()],
+               cmap='Greys', alpha=0.9)
+
+cbar = fig.colorbar(im, ax=ax)
+cbar.set_label("Vstall mínimo (m/s)")
+
+# cor verde-lima
+overlay_line_colors = ["#32CD32"] * len(CL_LIST)
+
+legend_lines = []
+for i, CLval in enumerate(CL_LIST):
+    vsub = df[df["CLmax"] == CLval]
+    pivot_vs = vsub.pivot_table(index='chord', columns='span', values='Vstall', aggfunc='mean')
+    Z = pivot_vs.values
+
+    try:
+        lvl1 = np.nanpercentile(Z, 30)
+        lvl2 = np.nanpercentile(Z, 50)
+        lvl3 = np.nanpercentile(Z, 70)
+        CS = ax.contour(X, Y, Z, levels=[lvl1, lvl2, lvl3],
+                        colors=overlay_line_colors[i], linewidths=1.5, linestyles='-')
+        ax.clabel(CS, fmt='%.1f', fontsize=8, inline=True)
+    except Exception:
+        med = np.nanmedian(Z)
+        ax.contour(X, Y, Z, levels=[med], colors=overlay_line_colors[i], linewidths=1.5)
+
+    legend_lines.append(Line2D([0],[0], color=overlay_line_colors[i], lw=2, label=f'CLmax={CLval}'))
+
+ax.set_title(f"Vstall contours (green-lime) — mass={MASS} kg")
+ax.set_xlabel("Span (m)")
+ax.set_ylabel("Chord (m)")
+
+ax.legend(handles=legend_lines, loc='upper right')
+
+plt.tight_layout()
+plt.show()
