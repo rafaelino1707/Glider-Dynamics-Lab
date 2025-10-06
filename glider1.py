@@ -82,7 +82,7 @@ class Glider:
 glider = Glider(
     mass=0.3,              # kg
     chord=0.1,             # m
-    wingspan=1.4,           # m
+    wingspan=1,           # m
     oswald_efficiency=0.75, # típico para asa simples
     cd0=0.04                # arrasto zero-lift de fuselagem+asa básica
 )
@@ -100,4 +100,4 @@ print("Arrasto D (N):", sink_info["D_N"])
 print("Taxa de sink vertical (m/s):", sink_info["sink_rate_m_s"])
 print("Glide ratio (L/D):", sink_info["glide_ratio"])
 
-print(f'Stall Velocity: {glider.stall_velocity(2)} m/s')
+print(f'Stall Velocity: {glider.stall_velocity(1.4)} m/s')
