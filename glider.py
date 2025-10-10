@@ -36,12 +36,12 @@ class Glider:
         return 4 * self.wingspan / (math.pi * self.total_chord)
 
     # ============================
-    # CENTRO DE GRAVIDADE
+    # CG GEOMÉTRICO
     # ============================
 
     @property
     def cg_chordwise(self):
-        """x̄ = (4 / (3π)) * (c_upper - c_lower)"""
+        """x̄ (geométrico) = (4 / (3π)) * (c_upper - c_lower)"""
         return (4 / (3 * math.pi)) * (self.c_upper - self.c_lower)
 
     @property
@@ -94,13 +94,13 @@ class Glider:
         return math.sqrt((2 * W) / (rho * S * CL_max))
 
     # ============================
-    # CENTRO DE PRESSÃO
+    # CP e AC
     # ============================
 
     def chordwise_cp(self, Cm, Cl):
         """
         x_CP/MAC ≈ 0.25 - (Cm/Cl)
-        Retorna x_CP em metros.
+        Retorna x_CP em metros (mesma referência usada no gráfico).
         """
         xcp_over_mac = 0.25 - (Cm / Cl)
         return xcp_over_mac * self.mean_aerodynamic_chord
@@ -110,84 +110,77 @@ class Glider:
         """y_CP,h = 2b / (3π)  (válido p/ carga ~elíptica)"""
         return (2 * self.wingspan) / (3 * math.pi)
 
-    def print_cp(self, Cm, Cl):
-        """Convenience: imprime CP chordwise e spanwise"""
+    @property
+    def x_ac(self):
+        """Aerodynamic Center (25% MAC) em metros no eixo x do gráfico"""
+        return 0.25 * self.mean_aerodynamic_chord
+
+    # ============================
+    # CG FÍSICO (AJUSTÁVEL)
+    # ============================
+
+    def x_cg_physical(self, frac_mac):
+        """
+        CG físico como fração da MAC medida do bordo de ataque da MAC.
+        Ex.: frac_mac=0.20 => x = 0.20*MAC
+        """
+        return float(frac_mac) * self.mean_aerodynamic_chord
+
+    def static_margin_cp(self, xcg_phys, Cm, Cl):
+        """
+        'Margem estática' usando CP como proxy: (x_CP - x_CG)/MAC.
+        >0 => CG à frente do CP (tendência estável).
+        """
         xcp = self.chordwise_cp(Cm, Cl)
-        mac = self.mean_aerodynamic_chord
-        ycp = self.spanwise_cp_half
-        print(f"x_CP = {xcp:.5f} m  ({xcp/mac:.3f} × MAC)")
-        print(f"y_CP (half-span) = {ycp:.5f} m  (~0.212 × b)")
+        return (xcp - xcg_phys) / self.mean_aerodynamic_chord
 
     # ============================
     # PLOTAGEM
     # ============================
 
-    def plot_wing_with_cg(self):
+    def plot_wing_with_cg_cp_ac(self, Cm, Cl, cg_phys_frac_mac=0.20, show_half_cp=True):
         """
-        Plota o contorno da asa (semi-elíptica combinada)
-        e marca o centro de gravidade geométrico (CG)
+        Plota asa + CG geométrico + CP + AC + CG físico (fração da MAC).
         """
         b = self.wingspan
-        y = np.linspace(-b/2, b/2, 200)
+        y = np.linspace(-b/2, b/2, 400)
 
         x_upper = self.c_upper * np.sqrt(1 - (4 * y**2) / b**2)
         x_lower = -self.c_lower * np.sqrt(1 - (4 * y**2) / b**2)
 
-        x_cg = self.cg_chordwise
-        y_cg = 0
-
-        plt.figure(figsize=(8, 4))
-        plt.plot(y, x_upper, label='Superfície superior')
-        plt.plot(y, x_lower, label='Superfície inferior')
-        plt.axhline(0, linestyle='--', linewidth=0.8)
-        plt.axvline(0, linestyle='--', linewidth=0.8)
-        plt.scatter(y_cg, x_cg, s=50, zorder=5, label='CG')
-
-        plt.title("Asa semi-elíptica combinada com CG")
-        plt.xlabel("y (spanwise, m)")
-        plt.ylabel("x (chordwise, m)")
-        plt.legend()
-        plt.axis('equal')
-        plt.grid(True)
-        plt.show()
-
-    def plot_wing_with_cg_cp(self, Cm, Cl):
-        """
-        Plota a asa e marca CG (laranja) e CP (verde) no plano (y,x),
-        assumindo condição simétrica (y_CP = 0 para a asa completa).
-        Para meia-asa, o CP spanwise de referência é y_CP,h.
-        """
-        b = self.wingspan
-        y = np.linspace(-b/2, b/2, 200)
-
-        x_upper = self.c_upper * np.sqrt(1 - (4 * y**2) / b**2)
-        x_lower = -self.c_lower * np.sqrt(1 - (4 * y**2) / b**2)
-
-        # CG global (asa simétrica)
-        x_cg = self.cg_chordwise
-        y_cg = 0.0
-
-        # CP chordwise (a asa completa fica em y=0 sob carregamento simétrico)
+        # Pontos
+        x_cg_geom = self.cg_chordwise
         x_cp = self.chordwise_cp(Cm, Cl)
-        y_cp_full = 0.0
-        # CP de meia-asa (caso queiras visualizar o ponto característico da meia-asa)
+        x_ac = self.x_ac
+        x_cg_phys = self.x_cg_physical(cg_phys_frac_mac)
+        y_center = 0.0
         y_cp_half = self.spanwise_cp_half
 
-        plt.figure(figsize=(9, 4.5))
+        # Gráfico
+        plt.figure(figsize=(9.5, 4.8))
         plt.plot(y, x_upper, label='Superfície superior')
         plt.plot(y, x_lower, label='Superfície inferior')
         plt.axhline(0, linestyle='--', linewidth=0.8)
         plt.axvline(0, linestyle='--', linewidth=0.8)
 
-        # CG (laranja) e CP global (verde) no centro de envergadura
-        plt.scatter(y_cg, x_cg, s=20, zorder=5, label='CG')
-        plt.scatter(y_cp_full, x_cp, s=20, zorder=5, label='CP (asa completa)')
+        # Marcadores
+        plt.scatter(y_center, x_cg_geom, s=60, label='CG geométrico')
+        plt.scatter(y_center, x_cp, s=70, label='CP (asa completa)')
+        if show_half_cp:
+            plt.scatter(y_cp_half, x_cp, s=55, label='CP (meia-asa)')
 
-        # (Opcional) Marca também o CP da meia-asa no semi-plano direito
-        plt.scatter(y_cp_half, x_cp, s=20, zorder=5, label='CP (meia-asa)')
+        # AC (linha vertical pontilhada no 25% MAC)
+        plt.axhline(x_ac, linestyle=':', linewidth=1.2, label='AC (25% MAC)')
 
+        # CG físico (ajustável)
+        plt.scatter(y_center, x_cg_phys, s=70, label=f'CG físico ({100*cg_phys_frac_mac:.0f}% MAC)')
 
-        plt.title("Asa semi-elíptica: CG e CP")
+        # Anotação da margem (CP vs CG físico)
+        SM = self.static_margin_cp(x_cg_phys, Cm, Cl)
+        plt.annotate(f"SM≈{SM:.2f} (CP−CG)/MAC", xy=(0, (x_cg_phys + x_cp)/2),
+                     xytext=(0.05*b, (x_cg_phys + x_cp)/2))
+
+        plt.title("Asa semi-elíptica: CG geom., CG físico, CP e AC")
         plt.xlabel("y (spanwise, m)")
         plt.ylabel("x (chordwise, m)")
         plt.legend()
@@ -211,17 +204,23 @@ glider = Glider(
 
 print("=== GEOMETRIA ===")
 print(f"Wing Area S = {glider.wing_area:.5f} m²")
-print(f"Mean Aerodynamic Chord (MAC) = {glider.mean_aerodynamic_chord:.5f} m")
-print(f"Aspect Ratio (AR) = {glider.aspect_ratio:.3f}")
-print(f"CG chordwise = {glider.cg_chordwise:.5f} m")
-print(f"CG spanwise (half-wing) = {glider.cg_spanwise_half:.5f} m")
+print(f"MAC = {glider.mean_aerodynamic_chord:.5f} m")
+print(f"AR = {glider.aspect_ratio:.3f}")
+print(f"CG geométrico (x) = {glider.cg_chordwise:.5f} m")
+print(f"AC (25% MAC) (x) = {glider.x_ac:.5f} m")
 
-# Valores típicos para um caso sub-sónico (ajusta aos teus dados do XFOIL)
-Cm_section = -0.05   # momento à volta do 1/4-corda (aprox. AC)
-Cl_section = 0.6
+# Dados aerodinâmicos (ajusta aos teus)
+Cm_section = -0.03
+Cl_section = 2
 
-print("\n=== CENTRO DE PRESSÃO ===")
-glider.print_cp(Cm=Cm_section, Cl=Cl_section)
+# CG físico como % da MAC (ex.: 20% MAC)
+cg_phys_frac = 0.20
+x_cg_phys = glider.x_cg_physical(cg_phys_frac)
+SM = glider.static_margin_cp(x_cg_phys, Cm_section, Cl_section)
+print("\n=== POSIÇÕES AERODINÂMICAS ===")
+print(f"x_CP = {glider.chordwise_cp(Cm_section, Cl_section):.5f} m")
+print(f"x_CG_físico = {x_cg_phys:.5f} m  ({cg_phys_frac:.2f} × MAC)")
+print(f"Margem (CP − CG)/MAC ≈ {SM:.3f}  (>0 desejável)")
 
-# Plot com CG e CP
-glider.plot_wing_with_cg_cp(Cm=Cm_section, Cl=Cl_section)
+# Plot geral
+glider.plot_wing_with_cg_cp_ac(Cm=Cm_section, Cl=Cl_section, cg_phys_frac_mac=cg_phys_frac)
