@@ -202,33 +202,33 @@ class Glider:
 
         # --- Plot ---
         plt.figure(figsize=(10, 5))
-        plt.plot(y, x_upper, label='Superfície superior')
-        plt.plot(y, x_lower, label='Superfície inferior')
+        plt.plot(y, x_upper, label='Upper Surface')
+        plt.plot(y, x_lower, label='Lower Surface')
         plt.axhline(0, linestyle='--', linewidth=0.8)
         plt.axvline(0, linestyle='--', linewidth=0.8)
 
         # MAC como segmento (em y=y_mac, apenas referência)
-        plt.plot([y_mac, y_mac], [x_le_mac_plot, x_te_mac_plot],
-                color='g', linewidth=2, label='MAC (segmento, referência)')
+        plt.plot([y_mac, y_mac], [x_le_mac_plot, x_te_mac_plot],linestyle='--',
+                color='g', linewidth=2, label='MAC (Reference Segment)')
 
         # Marcadores PRINCIPAIS no centro (y=0)
         plt.scatter(0.0, x_ac,      s=20, label='AC (25% MAC)')
-        plt.scatter(0.0, x_cp,      s=20, label=f'CP asa ({f_cp*100:.1f}% MAC)')
-        plt.scatter(0.0, x_cg_phys, s=20, label=f'CG físico ({f_cg*100:.0f}% MAC)')
-        plt.scatter(0.0, x_cg_geom, s=20, label='CG geométrico')
+        plt.scatter(0.0, x_cp,      s=20, label=f'Wing CP ({f_cp*100:.1f}% MAC)')
+        plt.scatter(0.0, x_cg_phys, s=20, label=f'Physical CG ({f_cg*100:.0f}% MAC)')
+        plt.scatter(0.0, x_cg_geom, s=20, label='Geometric CG')
 
         # Opcional: CP da meia-asa na sua estação spanwise
         if show_half_cp:
-            plt.scatter(self.spanwise_cp_half, x_cp, s=20, label='CP (meia-asa)')
+            plt.scatter(self.spanwise_cp_half, x_cp, s=20, label='CP (Half-Wing)')
 
         # Margem (numérica, indep. da origem)
         SM = self.static_margin_cp(self.x_cg_physical(cg_phys_frac_mac), Cm, Cl)
         midx = 0.5 * (x_cg_phys + x_cp)
         plt.annotate(f"SM≈{SM:.2f} (CP−CG)/MAC", xy=(0.0, midx), xytext=(0.05*b, midx))
 
-        plt.title("Asa semi-elíptica: MAC (referência), AC, CP e CG em y=0")
-        plt.xlabel("y (spanwise, m)")
-        plt.ylabel("x (chordwise, m)")
+        plt.title("Semi-Elliptical Wing: MAC (Reference), AC, CP and CG")
+        plt.xlabel("y (Spanwise, m)")
+        plt.ylabel("x (Chordwise, m)")
         plt.legend()
         plt.axis('equal')
         plt.grid(True)
@@ -281,19 +281,19 @@ class Glider:
         plt.axvline(0, linestyle='--', linewidth=0.8)
 
         # CG geométrico da meia-asa
-        plt.scatter(y_cg_half, x_cg_geom, s=30, label='Geometric CG (Half-Wing)')
+        plt.scatter(y_cg_half, x_cg_geom, s=20, label='Geometric CG (Half-Wing)')
 
         # CP (meia-asa)
-        plt.scatter(y_cp_half, x_cp, s=30, label=f'CP (Half-Wing, {f_cp*100:.1f}% MAC)')
+        plt.scatter(y_cp_half, x_cp, s=20, label=f'CP (Half-Wing, {f_cp*100:.1f}% MAC)')
 
         # (Opcional) CG físico
         if x_cg_phys is not None:
-            plt.scatter(y_cg_half, x_cg_phys, s=30, label=f'Physical CG ({cg_phys_frac_mac*100:.0f}% MAC)')
+            plt.scatter(y_cg_half, x_cg_phys, s=20, label=f'Physical CG ({cg_phys_frac_mac*100:.0f}% MAC)')
 
         # MAC desenhada como “régua” (em y=y_MAC, só referência)
         y_mac = self.y_mac
         x_te_mac_plot = x_le_mac_plot - L_mac
-        plt.plot([y_mac, y_mac], [x_le_mac_plot, x_te_mac_plot],linestyle='--', color='g', linewidth=2, label='MAC (referência)')
+        plt.plot([y_mac, y_mac], [x_le_mac_plot, x_te_mac_plot],linestyle='--', color='g', linewidth=2, label='MAC (Reference)')
 
         plt.title("Half Right Wing: Geometric CG and CP")
         plt.xlabel("y (Spanwise, m)")
@@ -312,10 +312,10 @@ class Glider:
 
 if __name__ == "__main__":
     glider = Glider(
-        mass=0.8,
+        mass=0.4,
         wingspan=0.8,
-        c_upper=0.028,   # LE do lado upper (x>0)
-        c_lower=0.062,
+        c_upper=0.024,   # LE do lado upper (x>0)
+        c_lower=0.056,
         oswald_efficiency=0.75,
         cd0=0.04
     )
@@ -323,7 +323,13 @@ if __name__ == "__main__":
     # Exemplo: Cm/Cl do teu caso
     Cm_section = -0.05
     Cl_section = 1.7
-
+    print("=== GEOMETRIA ===")
+    print(f"Wing Area S = {glider.wing_area:.5f} m²")
+    print(f"MAC = {glider.mean_aerodynamic_chord:.5f} m")
+    print(f"AR = {glider.aspect_ratio:.3f}")
+    print(f"CG geométrico (x) = {glider.cg_chordwise:.5f} m")
+    print(f"LE da MAC (x ref. linha média) = {glider.x_le_mac:.5f} m")
+    print(f"AC (25% MAC) (x, ref. linha média) = {glider.x_ac_plot():.5f} m")
     # Plot com CG físico em 20% da MAC
     glider.plot_wing_with_cg_cp_ac(Cm=Cm_section, Cl=Cl_section, cg_phys_frac_mac=0.20)
 
@@ -331,4 +337,4 @@ if __name__ == "__main__":
     glider.plot_half_wing_right(Cm=-0.05, Cl=1.7, cg_phys_frac_mac=0.20)
 
     # ou CP dado diretamente por percentagem da MAC (ex.: 30%):
-    glider.plot_half_wing_right(f_cp=0.30, cg_phys_frac_mac=0.20)
+    #glider.plot_half_wing_right(f_cp=0.30, cg_phys_frac_mac=0.20)

@@ -212,9 +212,9 @@ class Glider:
 
 glider = Glider(
     mass=0.8,
-    wingspan=0.8,
-    c_upper=0.028,
-    c_lower=0.062,
+    wingspan=0.4,
+    c_upper=0.014,
+    c_lower=0.026,
     oswald_efficiency=0.75,
     cd0=0.04
 )

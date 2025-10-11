@@ -52,8 +52,8 @@ class Glider:
         return math.sqrt((2.0 * W) / (rho * S * self.CLmax))
 
 # ----------------------------- Settings ------------------------------------
-chord_vals = np.linspace(0.02, 0.15, 41)
-span_vals  = np.linspace(0.5, 1.5, 41)
+chord_vals = np.linspace(0.01, 0.15, 41)
+span_vals  = np.linspace(0.2, 1.5, 41)
 masses = np.round(np.arange(0.1, 1.01, 0.1), 2)
 
 CL_MAX_DEFAULT = 1.2
