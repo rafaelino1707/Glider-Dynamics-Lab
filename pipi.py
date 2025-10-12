@@ -5,7 +5,7 @@ from CoolProp.CoolProp import PropsSI, PhaseSI
 import math
 
 fluid = "N2O"
-T = 17+273.15          # K
+T = 14+273.15          # K
 P_bar = 50.0          # bar
 P = P_bar * 1e5       # Pa
 
