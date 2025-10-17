@@ -39,7 +39,7 @@ chord_vals = np.linspace(0.02, 0.15, 41)
 span_vals  = np.linspace(0.5, 1.5, 41)
 masses = np.round(np.arange(0.1, 1.01, 0.1), 2)
 
-CL_MAX_DEFAULT = 1.1380
+CL_MAX_DEFAULT = 1.1380 
 OSWALD_EFF = 0.75
 CD0 = 0.04
 RHO = 1.225
@@ -101,7 +101,7 @@ for mass, group in df.groupby('mass_kg'):
     ax.set_xlabel('Span (m)'); ax.set_ylabel('Chord (m)')
     c = fig.colorbar(im, ax=ax); c.set_label('Vstall (m/s)')
 
-    x_ref, y_ref = 1.0, 0.10
+    x_ref, y_ref = 0.6, 0.05
     ax.axvline(x=x_ref, color='black', linestyle='--', linewidth=1)
     ax.axhline(y=y_ref, color='black', linestyle='--', linewidth=1)
     ax.plot(x_ref, y_ref, 'ro', markeredgecolor='black', markeredgewidth=1.5,

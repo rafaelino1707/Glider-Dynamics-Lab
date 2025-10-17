@@ -56,7 +56,7 @@ chord_vals = np.linspace(0.01, 0.15, 41)
 span_vals  = np.linspace(0.2, 1.5, 41)
 masses = np.round(np.arange(0.1, 1.01, 0.1), 2)
 
-CL_MAX_DEFAULT = 1.2
+CL_MAX_DEFAULT = 1.8
 OSWALD_EFF = 0.75
 CD0 = 0.04
 RHO = 1.225
