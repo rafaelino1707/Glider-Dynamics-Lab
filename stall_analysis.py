@@ -46,7 +46,7 @@ RHO = 1.225
 COLORMAP = 'Greys'
 
 now = datetime.now().strftime('%d_%m_%Y_%H_%M')
-out_dir = f'Stall_Analysis_CL_{CL_MAX_DEFAULT}_{now}'
+out_dir = f'Log/Stall_Analysis/Stall_Analysis_CL_{CL_MAX_DEFAULT}_{now}'
 os.makedirs(out_dir, exist_ok=True)
 
 # ---------------------------- Compute grid --------------------------------

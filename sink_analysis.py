@@ -63,7 +63,7 @@ RHO = 1.225
 COLORMAP = 'Greys'
 
 now = datetime.now().strftime('%d_%m_%Y_%H_%M')
-out_dir = f'Sink_Analysis_{now}'
+out_dir = f'Log/Sink_Analysis/Sink_Analysis_{now}'
 os.makedirs(out_dir, exist_ok=True)
 
 # ---------------------------- Compute grid --------------------------------
