@@ -125,7 +125,7 @@ for mass, group in df.groupby('mass_kg'):
     ax.set_xlabel('Span (m)'); ax.set_ylabel('Chord (m)')
     c = fig.colorbar(im, ax=ax); c.set_label('Vstall (m/s)')
 
-    x_ref, y_ref = 0.6, 0.05
+    x_ref, y_ref = 0.6, 0.08
     ax.axvline(x=x_ref, color='black', linestyle='--', linewidth=1)
     ax.axhline(y=y_ref, color='black', linestyle='--', linewidth=1)
     ax.plot(x_ref, y_ref, 'ro', markeredgecolor='black', markeredgewidth=1.5,

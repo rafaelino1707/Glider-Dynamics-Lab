@@ -201,11 +201,11 @@ class Glider:
 # ============================
 
 glider = Glider(
-    mass=0.8,
+    mass=0.2,
     wingspan=0.6,
-    c_upper=0.0125,
-    c_lower=0.0375,
-    oswald_efficiency=0.75,
+    c_upper=0.0225,
+    c_lower=0.0575,
+    oswald_efficiency=0.09,
     cd0=0.04
 )
 

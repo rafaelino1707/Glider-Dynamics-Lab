@@ -55,14 +55,14 @@ plt.show()
 # -----------------------------
 CLw = 1.29            # Lift coefficient of the wing
 CLh = -0.4            # Lift coefficient assumed for the horizontal stabilizer (para comparar)
-Sw = 0.02356          # Wing area [m^2]
-xac_w = 0.0106        # Aerodynamic center of the wing [m]
+Sw = 0.0377          # Wing area [m^2]
+xac_w = 0.0140        # Aerodynamic center of the wing [m]
 xCG = 0.09            # Center of gravity [m]
-MAC = 0.0424          # Mean aerodynamic chord [m]
+MAC = 0.0679          # Mean aerodynamic chord [m]
 Cm_ac = -0.2494       # Moment coefficient at aerodynamic center
 
 # geometria / braço estabilizador (usar o valor do projecto; aqui 0.50 m)
-l_h = 0.6       # (x_h - x_CG) [m]
+l_h = 0.5      # (x_h - x_CG) [m]
 
 # -----------------------------
 # Range for beta (Sh = beta * Sw)
