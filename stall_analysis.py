@@ -7,40 +7,60 @@ from datetime import datetime
 
 # ----------------------------- Glider class --------------------------------
 class Glider:
-    def __init__(self, mass_kg, chord_m, span_m, CLmax, oswald_efficiency=0.75, cd0=0.04):
-        self.mass = mass_kg
-        self.chord = chord_m
-        self.span = span_m
-        self.CLmax = CLmax
-        self.e = oswald_efficiency
+    def __init__(self, mass, wingspan, c_upper, c_lower, oswald_efficiency, cd0):
+        self.mass = mass
+        self.wingspan = wingspan
+        self.c_upper = c_upper
+        self.c_lower = c_lower
+        self.oswald_efficiency = oswald_efficiency
         self.cd0 = cd0
+
+    # ============================
+    # GEOMETRIA
+    # ============================
+
+    @property
+    def total_chord(self):
+        """C = c_upper + c_lower"""
+        return self.c_upper + self.c_lower
 
     @property
     def wing_area(self):
-        return max(self.chord * self.span, 1e-12)
+        """S = (π * b / 4) * (c_upper + c_lower)"""
+        return (math.pi * self.wingspan / 4) * self.total_chord
+
+    @property
+    def mean_aerodynamic_chord(self):
+        """MAC = (8 / (3π)) * (c_upper + c_lower)"""
+        return (8 / (3 * math.pi)) * self.total_chord
 
     @property
     def aspect_ratio(self):
-        S = self.wing_area
-        return (self.span ** 2) / S
+        """AR = 4b / [π (c_upper + c_lower)]"""
+        return 4 * self.wingspan / (math.pi * self.total_chord)
+
+    # ============================
+    # AERODINÂMICA
+    # ============================
 
     @property
     def induced_drag_factor(self):
-        AR = self.aspect_ratio
-        return 1.0 / (math.pi * AR * self.e)
+        """K = 1 / (π * AR * e)"""
+        return 1 / (math.pi * self.aspect_ratio * self.oswald_efficiency)
 
-    def Vstall(self, rho=1.225):
+    def stall_velocity(self, CL_max, rho=1.225):
+        """V_stall = sqrt((2W)/(ρ S CL_max))"""
         W = self.mass * 9.81
         S = self.wing_area
-        return math.sqrt((2.0 * W) / (rho * S * self.CLmax))
+        return math.sqrt((2 * W) / (rho * S * CL_max))
 
 # ----------------------------- Settings ------------------------------------
-chord_vals = np.linspace(0.02, 0.15, 41)
-span_vals  = np.linspace(0.5, 1.5, 41)
+chord_vals = np.linspace(0.02, 0.1, 41)  # Gerando o valor total da corda
+span_vals = np.linspace(0.5, 1.5, 41)
 masses = np.round(np.arange(0.1, 1.01, 0.1), 2)
 
-CL_MAX_DEFAULT = 1.1380 
-OSWALD_EFF = 0.75
+CL_MAX_DEFAULT = 1.7187
+OSWALD_EFF = 0.9
 CD0 = 0.04
 RHO = 1.225
 COLORMAP = 'Greys'
@@ -53,15 +73,19 @@ os.makedirs(out_dir, exist_ok=True)
 print("Running sweep over masses:", masses)
 rows = []
 for mass in masses:
-    for chord in chord_vals:
+    for c in chord_vals:
+        c_upper = 0.25 * c  # 25% da corda total para c_upper
+        c_lower = 0.75 * c  # 75% da corda total para c_lower
         for span in span_vals:
-            g = Glider(mass, chord, span, CLmax=CL_MAX_DEFAULT, oswald_efficiency=OSWALD_EFF, cd0=CD0)
+            g = Glider(mass, span, c_upper, c_lower, oswald_efficiency=OSWALD_EFF, cd0=CD0)
             rows.append({
                 "mass_kg": mass,
-                "chord_m": chord,
+                "c_upper_m": c_upper,
+                "c_lower_m": c_lower,
                 "span_m": span,
+                "total_chord_m": g.total_chord,  # Agora estamos adicionando a coluna total_chord
                 "wing_area_m2": g.wing_area,
-                "Vstall_m_s": g.Vstall(rho=RHO)
+                "Vstall_m_s": g.stall_velocity(CL_max=CL_MAX_DEFAULT, rho=RHO)
             })
 
 df = pd.DataFrame(rows)
@@ -90,12 +114,12 @@ os.makedirs(vstall_dir, exist_ok=True)
 
 for mass, group in df.groupby('mass_kg'):
     sub = group.copy()
-    pivot_vstall= sub.pivot_table(index='chord_m', columns='span_m', values='Vstall_m_s', aggfunc='mean')
+    pivot_vstall = sub.pivot_table(index='total_chord_m', columns='span_m', values='Vstall_m_s', aggfunc='mean')
     X = pivot_vstall.columns.values
     Y = pivot_vstall.index.values
     extent = [X.min(), X.max(), Y.min(), Y.max()]
 
-    fig, ax = plt.subplots(figsize=(7,5))
+    fig, ax = plt.subplots(figsize=(7, 5))
     im = ax.imshow(pivot_vstall.values, origin='lower', aspect='auto', extent=extent, cmap=COLORMAP)
     ax.set_title(f'Vstall (m/s) — CLmax={CL_MAX_DEFAULT} — mass={mass} kg')
     ax.set_xlabel('Span (m)'); ax.set_ylabel('Chord (m)')
@@ -105,21 +129,18 @@ for mass, group in df.groupby('mass_kg'):
     ax.axvline(x=x_ref, color='black', linestyle='--', linewidth=1)
     ax.axhline(y=y_ref, color='black', linestyle='--', linewidth=1)
     ax.plot(x_ref, y_ref, 'ro', markeredgecolor='black', markeredgewidth=1.5,
-            markersize=6, label='Stall Velocity \n (b=1.0m, c=0.10m)')
-    ax.legend(loc='best', fontsize=8)
+            markersize=6, label='Stall Velocity \n (b=0.6m, c=0.05m)')
+    
+    # Interpolando a velocidade de stall no ponto de referência
+    vstall_ref = bilinear_interpolate(X, Y, pivot_vstall.values, x_ref, y_ref)
+    offset_x = (X.max() - X.min()) * 0.03
+    offset_y = (Y.max() - Y.min()) * 0.03
+    ax.text(x_ref + offset_x, y_ref + offset_y,
+            f"{vstall_ref:.2f} m/s",
+            color='black', fontsize=9, fontweight='bold',
+            bbox=dict(facecolor='white', alpha=0.8, edgecolor='none', pad=2))
 
-    try:
-        vstall_ref = bilinear_interpolate(X, Y, pivot_vstall.values, x_ref, y_ref)
-        x_span = X.max() - X.min()
-        y_span = Y.max() - Y.min()
-        offset_x = x_span * 0.03
-        offset_y = y_span * 0.03
-        ax.text(x_ref + offset_x, y_ref + offset_y,
-                f"{vstall_ref:.2f} m/s",
-                color='black', fontsize=9, fontweight='bold',
-                bbox=dict(facecolor='white', alpha=0.8, edgecolor='none', pad=2))
-    except Exception as e:
-        print("Warning: failed to annotate Vstall at reference point:", e)
+    ax.legend(loc='best', fontsize=8)
 
     fig.savefig(os.path.join(vstall_dir, f'heat_vstall_mass{mass:.1f}.png'), dpi=200)
     plt.close(fig)

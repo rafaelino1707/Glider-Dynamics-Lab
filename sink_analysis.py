@@ -7,35 +7,56 @@ from datetime import datetime
 
 # ----------------------------- Glider class --------------------------------
 class Glider:
-    def __init__(self, mass_kg, chord_m, span_m, CLmax, oswald_efficiency=0.75, cd0=0.04):
+    def __init__(self, mass_kg, wingspan_m, c_upper_m, c_lower_m, oswald_efficiency=0.75, cd0=0.04):
         self.mass = mass_kg
-        self.chord = chord_m
-        self.span = span_m
-        self.CLmax = CLmax
-        self.e = oswald_efficiency
+        self.wingspan = wingspan_m
+        self.c_upper = c_upper_m
+        self.c_lower = c_lower_m
+        self.oswald_efficiency = oswald_efficiency
         self.cd0 = cd0
+
+    # ============================
+    # GEOMETRIA
+    # ============================
+
+    @property
+    def total_chord(self):
+        """C = c_upper + c_lower"""
+        return self.c_upper + self.c_lower
 
     @property
     def wing_area(self):
-        return max(self.chord * self.span, 1e-12)
+        """S = (π * b / 4) * (c_upper + c_lower)"""
+        return (math.pi * self.wingspan / 4) * self.total_chord
+
+    @property
+    def mean_aerodynamic_chord(self):
+        """MAC = (8 / (3π)) * (c_upper + c_lower)"""
+        return (8 / (3 * math.pi)) * self.total_chord
 
     @property
     def aspect_ratio(self):
-        S = self.wing_area
-        return (self.span ** 2) / S
+        """AR = 4b / [π (c_upper + c_lower)]"""
+        return 4 * self.wingspan / (math.pi * self.total_chord)
+
+    # ============================
+    # AERODINÂMICA
+    # ============================
 
     @property
     def induced_drag_factor(self):
-        AR = self.aspect_ratio
-        return 1.0 / (math.pi * AR * self.e)
+        """K = 1 / (π * AR * e)"""
+        return 1 / (math.pi * self.aspect_ratio * self.oswald_efficiency)
 
     def Vmin_theoretical(self, rho=1.225):
+        """V_min ≈ sqrt(2/rho) * (K/CD0)^(1/4) * sqrt(W/S)"""
         W = self.mass * 9.81
         S = self.wing_area
         K = self.induced_drag_factor
         return math.sqrt(2.0 / rho) * (K / self.cd0)**0.25 * math.sqrt(W / S)
 
     def sink_at_V(self, V, rho=1.225):
+        """Calcula a taxa de sink a uma velocidade V"""
         W = self.mass * 9.81
         S = self.wing_area
         CL = W / (0.5 * rho * V**2 * S)
@@ -47,6 +68,7 @@ class Glider:
         return {"V": V, "CL": CL, "CD": CD, "D": D, "sink": sink, "glide": glide}
 
     def Vstall(self, rho=1.225):
+        """V_stall = sqrt((2W)/(ρ S CLmax))"""
         W = self.mass * 9.81
         S = self.wing_area
         return math.sqrt((2.0 * W) / (rho * S * self.CLmax))
@@ -57,7 +79,7 @@ span_vals  = np.linspace(0.2, 1.5, 41)
 masses = np.round(np.arange(0.1, 1.01, 0.1), 2)
 
 CL_MAX_DEFAULT = 1.8
-OSWALD_EFF = 0.75
+OSWALD_EFF = 0.9
 CD0 = 0.04
 RHO = 1.225
 COLORMAP = 'Greys'
@@ -72,7 +94,9 @@ rows = []
 for mass in masses:
     for chord in chord_vals:
         for span in span_vals:
-            g = Glider(mass, chord, span, CLmax=CL_MAX_DEFAULT, oswald_efficiency=OSWALD_EFF, cd0=CD0)
+            c_upper = 0.25 * chord  # 25% da corda total para c_upper
+            c_lower = 0.75 * chord  # 75% da corda total para c_lower
+            g = Glider(mass, span, c_upper, c_lower, CLmax=CL_MAX_DEFAULT, oswald_efficiency=OSWALD_EFF, cd0=CD0)
             Vmin = g.Vmin_theoretical(rho=RHO)
             sink_info = g.sink_at_V(Vmin, rho=RHO)
             Vstall = g.Vstall(rho=RHO)
