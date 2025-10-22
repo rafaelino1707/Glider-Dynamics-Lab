@@ -59,7 +59,7 @@ chord_vals = np.linspace(0.02, 0.1, 41)  # Gerando o valor total da corda
 span_vals = np.linspace(0.5, 1.5, 41)
 masses = np.round(np.arange(0.1, 1.01, 0.1), 2)
 
-CL_MAX_DEFAULT = 1.7187
+CL_MAX_DEFAULT =  1.1836
 OSWALD_EFF = 0.9
 CD0 = 0.04
 RHO = 1.225

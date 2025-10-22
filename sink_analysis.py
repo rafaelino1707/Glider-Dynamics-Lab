@@ -108,7 +108,7 @@ span_vals  = np.linspace(0.2, 1.5, 41)
 masses = np.round(np.arange(0.1, 1.01, 0.1), 2)
 
 CL_MAX_DEFAULT = 1.7187
-OSWALD_EFF = 0.75
+OSWALD_EFF = 0.9
 CD0 = 0.03
 RHO = 1.225
 COLORMAP = 'Greys'
