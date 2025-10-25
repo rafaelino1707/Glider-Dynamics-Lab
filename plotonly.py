@@ -13,14 +13,14 @@ def read_polar(filename):
     return alfas, CLs
 
 # ======== Lê o ficheiro (ajusta o caminho conforme necessário) ========
-filename = "Airfoils/NACA0010/naca0010_Re_5e4.txt"
+filename = "Airfoils/NACA0010/naca0010_Re_3e4.txt"
 alfas, CLs = read_polar(filename)
 
 # ======== Plot ========
 plt.figure(figsize=(8,5))
 plt.plot(alfas, CLs, 'r-', linewidth=2)
 
-plt.title("Lift Curve, Re=50k", fontsize=14)
+plt.title("Lift Curve, Re=30k", fontsize=14)
 plt.xlabel("Angle of Attack [deg]")
 plt.ylabel("Lift Coefficient (C_M)")
 plt.grid(True)

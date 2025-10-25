@@ -1,6 +1,7 @@
 import math
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.patches import Ellipse
 
 class Glider:
     def __init__(self, mass, wingspan, c_upper, c_lower, oswald_efficiency, cd0):
@@ -11,55 +12,35 @@ class Glider:
         self.oswald_efficiency = oswald_efficiency
         self.cd0 = cd0
 
-    # ============================
-    # GEOMETRIA
-    # ============================
-
     @property
     def total_chord(self):
-        """C = c_upper + c_lower"""
         return self.c_upper + self.c_lower
 
     @property
     def wing_area(self):
-        """S = (π * b / 4) * (c_upper + c_lower)"""
         return (math.pi * self.wingspan / 4) * self.total_chord
 
     @property
     def mean_aerodynamic_chord(self):
-        """MAC = (8 / (3π)) * (c_upper + c_lower)"""
         return (8 / (3 * math.pi)) * self.total_chord
 
     @property
     def aspect_ratio(self):
-        """AR = 4b / [π (c_upper + c_lower)]"""
         return 4 * self.wingspan / (math.pi * self.total_chord)
-
-    # ============================
-    # CENTRO DE GRAVIDADE
-    # ============================
 
     @property
     def cg_chordwise(self):
-        """x̄ = (4 / (3π)) * (c_upper - c_lower)"""
         return (4 / (3 * math.pi)) * (self.c_upper - self.c_lower)
 
     @property
     def cg_spanwise_half(self):
-        """ȳ_h = (2b) / (3π)"""
         return (2 * self.wingspan) / (3 * math.pi)
-
-    # ============================
-    # AERODINÂMICA
-    # ============================
 
     @property
     def induced_drag_factor(self):
-        """K = 1 / (π * AR * e)"""
         return 1 / (math.pi * self.aspect_ratio * self.oswald_efficiency)
 
     def minimum_sink_velocity(self, rho=1.225):
-        """V_min_sink ≈ sqrt(2/rho) * (K/CD0)^(1/4) * sqrt(W/S)"""
         W = self.mass * 9.81
         term_1 = math.sqrt(2 / rho)
         term_2 = (self.induced_drag_factor / self.cd0) ** 0.25
@@ -67,7 +48,6 @@ class Glider:
         return term_1 * term_2 * term_3
 
     def vertical_sink_rate(self, V=None, rho=1.225):
-        """Calcula taxa de sink vertical"""
         W = self.mass * 9.81
         S = self.wing_area
         if V is None:
@@ -78,121 +58,121 @@ class Glider:
         D = 0.5 * rho * V**2 * S * CD
         sink_rate = V * (D / W)
         glide_ratio = W / D if D != 0 else float("inf")
-        return {
-            "V_used": V,
-            "CL": CL,
-            "CD": CD,
-            "D_N": D,
-            "sink_rate_m_s": sink_rate,
-            "glide_ratio": glide_ratio
-        }
+        return {"V_used": V, "CL": CL, "CD": CD, "D_N": D,
+                "sink_rate_m_s": sink_rate, "glide_ratio": glide_ratio}
 
     def stall_velocity(self, CL_max, rho=1.225):
-        """V_stall = sqrt((2W)/(ρ S CL_max))"""
         W = self.mass * 9.81
         S = self.wing_area
         return math.sqrt((2 * W) / (rho * S * CL_max))
 
-    # ============================
-    # CENTRO DE PRESSÃO
-    # ============================
-
     def chordwise_cp(self, Cm, Cl):
-        """
-        x_CP/MAC ≈ 0.25 - (Cm/Cl)
-        Retorna x_CP em metros.
-        """
         xcp_over_mac = 0.25 - (Cm / Cl)
         return xcp_over_mac * self.mean_aerodynamic_chord
 
     @property
     def spanwise_cp_half(self):
-        """y_CP,h = 2b / (3π)  (válido p/ carga ~elíptica)"""
         return (2 * self.wingspan) / (3 * math.pi)
 
     def print_cp(self, Cm, Cl):
-        """Convenience: imprime CP chordwise e spanwise"""
         xcp = self.chordwise_cp(Cm, Cl)
         mac = self.mean_aerodynamic_chord
         ycp = self.spanwise_cp_half
         print(f"x_CP = {xcp:.5f} m  ({xcp/mac:.3f} × MAC)")
         print(f"y_CP (half-span) = {ycp:.5f} m  (~0.212 × b)")
 
-    # ============================
-    # PLOTAGEM
-    # ============================
+    def _wing_edges(self, b, c_up, c_low, y):
+        x_upper = c_up * np.sqrt(1 - (4 * y**2) / b**2)
+        x_lower = -c_low * np.sqrt(1 - (4 * y**2) / b**2)
+        return x_upper, x_lower
 
-    def plot_wing_with_cg(self):
-        """
-        Plota o contorno da asa (semi-elíptica combinada)
-        e marca o centro de gravidade geométrico (CG)
-        """
+    def plot_glider_model(self,
+                          fuse_len=0.50,
+                          fuse_w=0.035,
+                          tail_span=0.25,
+                          tail_scale=0.55,
+                          tail_x_offset=0.35):
+
         b = self.wingspan
-        y = np.linspace(-b/2, b/2, 200)
+        y = np.linspace(-b/2, b/2, 600)
+        x_u, x_l = self._wing_edges(b, self.c_upper, self.c_lower, y)
 
-        x_upper = self.c_upper * np.sqrt(1 - (4 * y**2) / b**2)
-        x_lower = -self.c_lower * np.sqrt(1 - (4 * y**2) / b**2)
+        b_t = tail_span
+        y_t = np.linspace(-b_t/2, b_t/2, 400)
 
-        x_cg = self.cg_chordwise
+        c_up_t = self.c_upper * tail_scale
+        c_lo_t = self.c_lower * tail_scale
+        x_u_t, x_l_t = self._wing_edges(b_t, c_up_t, c_lo_t, y_t)
+
+        tail_x_offset = -0.285
+        tail_y_offset = 0
+        x_u_t += tail_x_offset
+        x_l_t += tail_x_offset
+        y_t += tail_y_offset
+
+        x_np = 0.00321
+        y_np = 0
         y_cg = 0
+        x_cg = 0.0168
+        y_cp_full = 0
+        x_cp = -0.0002
+        fuse_center_x = -0.25/2
 
-        plt.figure(figsize=(8, 4))
-        plt.plot(y, x_upper, label='Superfície superior')
-        plt.plot(y, x_lower, label='Superfície inferior')
-        plt.axhline(0, linestyle='--', linewidth=0.8)
-        plt.axvline(0, linestyle='--', linewidth=0.8)
-        plt.scatter(y_cg, x_cg, s=50, zorder=5, label='CG')
+        # --- inversão vertical completa ---
+        invert = -1
+        x_u *= invert
+        x_l *= invert
+        x_u_t *= invert
+        x_l_t *= invert
+        x_cg *= invert
+        x_cp *= invert
+        x_np *= invert
+        fuse_center_x *= invert
 
-        plt.title("Asa semi-elíptica combinada com CG")
-        plt.xlabel("y (spanwise, m)")
-        plt.ylabel("x (chordwise, m)")
-        plt.legend()
-        plt.axis('equal')
-        plt.grid(True)
-        plt.show()
+        fig, ax = plt.subplots(figsize=(9, 5))
 
-    def plot_wing_with_cg_cp(self, Cm, Cl):
-        """
-        Plota a asa e marca CG (laranja) e CP (verde) no plano (y,x),
-        assumindo condição simétrica (y_CP = 0 para a asa completa).
-        Para meia-asa, o CP spanwise de referência é y_CP,h.
-        """
+        plt.scatter(y_cg, x_cg, s=15, zorder=5, color='darkred', label=r'$x_{CG} = -0.0168$')
+        plt.scatter(y_cp_full, x_cp, s=15, zorder=5, color='darkgreen', label=r'$x_{CP} = 0.0002$')
+        plt.scatter(y_np, x_np, s=15, zorder=6, color='darkgoldenrod', label=r'$x_{NP} = -0.00321$')
+
+        # --- MAC numa semi-asa (direita) ---
+        MAC = self.mean_aerodynamic_chord
         b = self.wingspan
-        y = np.linspace(-b/2, b/2, 200)
+        ratio = 8 / (3 * math.pi)                     # MAC / (c_upper + c_lower)
+        y_mac = (b/2) * math.sqrt(1 - ratio**2)       # posição spanwise da MAC
 
-        x_upper = self.c_upper * np.sqrt(1 - (4 * y**2) / b**2)
-        x_lower = -self.c_lower * np.sqrt(1 - (4 * y**2) / b**2)
+        # bordos da corda local em y_mac
+        x_le_mac = self.c_upper * math.sqrt(1 - (4 * y_mac**2) / b**2)
+        x_te_mac = -self.c_lower * math.sqrt(1 - (4 * y_mac**2) / b**2)
 
-        # CG global (asa simétrica)
-        x_cg = self.cg_chordwise
-        y_cg = 0.0
+        # aplicar a inversão vertical usada no resto da figura
+        x_le_mac *= invert
+        x_te_mac *= invert
 
-        # CP chordwise (a asa completa fica em y=0 sob carregamento simétrico)
-        x_cp = self.chordwise_cp(Cm, Cl)
-        y_cp_full = 0.0
-        # CP de meia-asa (caso queiras visualizar o ponto característico da meia-asa)
-        y_cp_half = self.spanwise_cp_half
+        # desenhar a MAC a tracejado
+        ax.plot([y_mac, y_mac], [x_te_mac, x_le_mac],
+                linestyle='--', linewidth=1.6, label='MAC (wing)')
+        ax.plot(y, x_u, label="LE Wing")
+        ax.plot(y, x_l, label="TE Wing")
 
-        plt.figure(figsize=(9, 4.5))
-        plt.plot(y, x_upper, label='Superfície superior')
-        plt.plot(y, x_lower, label='Superfície inferior')
-        plt.axhline(0, linestyle='--', linewidth=0.8)
-        plt.axvline(0, linestyle='--', linewidth=0.8)
+        body = Ellipse((0.0, fuse_center_x), width=fuse_w, height=fuse_len,
+                       fill=False, linewidth=1.4)
+        ax.add_patch(body)
 
-        # CG (laranja) e CP global (verde) no centro de envergadura
-        plt.scatter(y_cg, x_cg, s=20, zorder=5, label='CG')
-        plt.scatter(y_cp_full, x_cp, s=20, zorder=5, label='CP (asa completa)')
+        ax.plot(y_t, x_u_t, label="LE Stabilizer")
+        ax.plot(y_t, x_l_t, label="TE Stabilizer")
 
-        # (Opcional) Marca também o CP da meia-asa no semi-plano direito
-        plt.scatter(y_cp_half, x_cp, s=20, zorder=5, label='CP (meia-asa)')
+        ax.axhline(0, linestyle='--', linewidth=0.8)
+        ax.axvline(0, linestyle='--', linewidth=0.8)
 
+        ax.set_title("Glider Top Visualization")
+        ax.set_xlabel("y (spanwise, m)")
+        ax.set_ylabel("x (chordwise, m)")
+        ax.legend()
+        ax.set_aspect('equal', adjustable='box')
+        ax.grid(True)
+        ax.invert_yaxis()
 
-        plt.title("Asa semi-elíptica: CG e CP")
-        plt.xlabel("y (spanwise, m)")
-        plt.ylabel("x (chordwise, m)")
-        plt.legend()
-        plt.axis('equal')
-        plt.grid(True)
         plt.show()
 
 
@@ -203,8 +183,8 @@ class Glider:
 glider = Glider(
     mass=0.2,
     wingspan=0.6,
-    c_upper=0.0225,
-    c_lower=0.0575,
+    c_upper=0.02,
+    c_lower=0.06,
     oswald_efficiency=0.09,
     cd0=0.04
 )
@@ -216,12 +196,15 @@ print(f"Aspect Ratio (AR) = {glider.aspect_ratio:.3f}")
 print(f"CG chordwise = {glider.cg_chordwise:.5f} m")
 print(f"CG spanwise (half-wing) = {glider.cg_spanwise_half:.5f} m")
 
-# Valores típicos para um caso sub-sónico (ajusta aos teus dados do XFOIL)
-Cm_section = -0.05   # momento à volta do 1/4-corda (aprox. AC)
+Cm_section = -0.05
 Cl_section = 0.6
-
 print("\n=== CENTRO DE PRESSÃO ===")
 glider.print_cp(Cm=Cm_section, Cl=Cl_section)
 
-# Plot com CG e CP
-glider.plot_wing_with_cg_cp(Cm=Cm_section, Cl=Cl_section)
+glider.plot_glider_model(
+    fuse_len=0.42,
+    fuse_w=0.035,
+    tail_span=0.24,
+    tail_scale=0.55,
+    tail_x_offset=0.35
+)

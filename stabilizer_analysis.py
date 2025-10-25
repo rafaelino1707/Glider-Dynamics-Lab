@@ -18,7 +18,7 @@ CLh_as = -0.40       # CL assumido para o estabilizador (sinal tail-down)
 # ==========================
 # Escolha do alvo de volume horizontal
 # ==========================
-VH_target = 0.50     # típico: 0.4–0.7
+VH_target = 0.90     # típico: 0.4–0.7
 
 # ==========================
 # Varre l_h = (x_h - x_CG)
@@ -57,13 +57,11 @@ print("CSV guardado: beta_vs_lh_VH_and_trim.csv")
 # ==========================
 plt.figure(figsize=(8,5))
 plt.plot(l_h, beta_VH,  label=r'$\beta$ from $V_H$ (target={:.2f})'.format(VH_target), lw=2)
-plt.plot(l_h, beta_trim,
-         label=rf'$\beta$ from trim (assume $C_{{L_h}}$={CLh_as:.2f})',
-         lw=2)
+
 
 plt.xlabel(r'$l_h = (x_h - x_{CG})$ [m]')
 plt.ylabel(r'$\beta = S_h/S_w$')
-plt.title(r'$\beta$ vs $l_h$: alvo de $V_H$ e requisito de trim')
+plt.title(r'$\beta$ vs $(x_h - x_{CG})$: for $V_H=0.90$')
 plt.grid(True, ls='--', alpha=0.6)
 plt.legend()
 plt.tight_layout()
