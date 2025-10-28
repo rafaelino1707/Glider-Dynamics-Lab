@@ -106,7 +106,7 @@ axs[2].set_title("Re = 200 000")
 axs[2].legend()
 
 fig.subplots_adjust(left=0.07, right=0.95, wspace=0.3, top=0.88, bottom=0.1)
-plt.savefig("Lift_Curves")
+plt.savefig("Log/Plots/Lift_Curves")
 plt.show()
 
 # ======================= FIGURA 2: CL vs CD =======================
@@ -151,7 +151,7 @@ axs[2].set_title("Re = 200 000")
 axs[2].legend()
 
 fig.subplots_adjust(left=0.07, right=0.95, wspace=0.3, top=0.88, bottom=0.1)
-plt.savefig("CL_vs_CD")
+plt.savefig("Log/Plots/CL_vs_CD")
 plt.show()
 
 # ======================= FIGURA 3: Drag Curves =======================
@@ -196,7 +196,7 @@ axs[2].set_title("Re = 200 000")
 axs[2].legend()
 
 fig.subplots_adjust(left=0.07, right=0.95, wspace=0.3, top=0.88, bottom=0.1)
-plt.savefig("Drag_Curves")
+plt.savefig("Log/Plots/Drag_Curves")
 plt.show()
 
 # ======================= FIGURA 4: L/D Ratio =======================
@@ -241,5 +241,5 @@ axs[2].set_title("Re = 200 000")
 axs[2].legend()
 
 fig.subplots_adjust(left=0.07, right=0.95, wspace=0.3, top=0.88, bottom=0.1)
-plt.savefig("L_D_Ratio")
+plt.savefig("Log/Plots/L_D_Ratio")
 plt.show()

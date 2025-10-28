@@ -49,7 +49,7 @@ df = pd.DataFrame({
     'beta_from_trim(CLh={:.2f})'.format(CLh_as): beta_trim,
     'VH_target': np.full_like(l_h, VH_target),
 })
-df.to_csv('beta_vs_lh_VH_and_trim.csv', index=False)
+df.to_csv('Log/Horizontal_Stabilizer/beta_vs_lh_VH_and_trim.csv', index=False)
 print("CSV guardado: beta_vs_lh_VH_and_trim.csv")
 
 # ==========================
