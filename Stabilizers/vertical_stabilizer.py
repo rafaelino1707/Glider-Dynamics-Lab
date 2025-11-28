@@ -11,15 +11,15 @@ Cnb_target   = 0.1  # desired dCn/dβ [1/rad]
 Cnb_fus      = -0.05  # fuselage contribution
 eta_v        = 0.8   # effectiveness
 dSigma_dBeta = 0.20   # sidewash gradient
-
+ 
 # vertical stabilizer geometry for sweep relations
-b_v      = 0.082      # fin height [m] (use your value)
-c_r      = 0.036      # root chord [m]
-c_t      = 0.020      # tip chord [m]
-LambdaLE = 12.0       # LE sweep [deg]
+b_v      = 0.052      # fin height [m] (use your value)
+c_r      = 0.05      # root chord [m]
+c_t      = 0.0305      # tip chord [m]
+LambdaLE = 15.0       # LE sweep [deg]      
 
 # aerodynamic constants
-e_oswald = 0.75       # tail efficiency
+e_oswald = 0.9     # tail efficiency
 a0       = 2*np.pi    # 2D lift-curve slope [rad^-1]
 ARv_assumed = 3.0     # fin AR used in a_v
 M        = 0.0        # Mach (keep 0 for incompressible)
@@ -43,7 +43,8 @@ def a_v_from_AR_sweep(AR, Lambda_c4_deg, e=0.92, a0=2*np.pi, M=0.0):
     beta = np.sqrt(1.0 - (M*mu)**2)
     return (a0*mu) / (beta + (a0*mu)/(np.pi*e*AR))
 
-Lambda_c4 = quarter_chord_sweep_deg(LambdaLE, c_r, c_t, b_v)
+#Lambda_c4 = quarter_chord_sweep_deg(LambdaLE, c_r, c_t, b_v)
+Lambda_c4 = LambdaLE
 a_v = a_v_from_AR_sweep(ARv_assumed, Lambda_c4, e_oswald, a0, M)
 
 # ---- gamma from Vv and from Cn_beta ----
