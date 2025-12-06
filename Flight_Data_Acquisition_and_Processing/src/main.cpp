@@ -92,32 +92,45 @@ void loop() {
     payload[6] = az;
     telemetryUpdate(payload, 7);
 
-    // Logging pela porta série
-    Serial.print("q = ");
-    Serial.print(qw, 4); Serial.print(", ");
-    Serial.print(qx, 4); Serial.print(", ");
-    Serial.print(qy, 4); Serial.print(", ");
-    Serial.print(qz, 4);
+    const float g0 = 9.81f;
 
-    Serial.print("   a = ");
-    Serial.print(ax, 3); Serial.print(", ");
-    Serial.print(ay, 3); Serial.print(", ");
-    Serial.print(az, 3);
+    float ax_mps2     = ax     * g0;
+    float ay_mps2     = ay     * g0;
+    float az_mps2     = az     * g0;
+    float ax_lin_mps2 = ax_lin * g0;
+    float ay_lin_mps2 = ay_lin * g0;
+    float az_lin_mps2 = az_lin * g0;
 
-    Serial.print("   g[deg/s] = ");
-    Serial.print(gx_deg, 2); Serial.print(", ");
-    Serial.print(gy_deg, 2); Serial.print(", ");
-    Serial.print(gz_deg, 2);
+    uint32_t t_ms = millis();
 
-    Serial.print("   rpy[deg] = ");
-    Serial.print(roll_deg, 2); Serial.print(", ");
-    Serial.print(pitch_deg, 2); Serial.print(", ");
-    Serial.print(yaw_deg, 2);
+ 
 
-    Serial.print("   a_lin = ");
-    Serial.print(ax_lin, 3); Serial.print(", ");
-    Serial.print(ay_lin, 3); Serial.print(", ");
-    Serial.print(az_lin, 3);
+    Serial.print(t_ms);        Serial.print(',');
+    Serial.print(qw, 6);       Serial.print(',');
+    Serial.print(qx, 6);       Serial.print(',');
+    Serial.print(qy, 6);       Serial.print(',');
+    Serial.print(qz, 6);       Serial.print(',');
+
+    Serial.print(ax_mps2, 6);  Serial.print(',');
+    Serial.print(ay_mps2, 6);  Serial.print(',');
+    Serial.print(az_mps2, 6);  Serial.print(',');
+
+    Serial.print(gx_deg, 6);   Serial.print(',');
+    Serial.print(gy_deg, 6);   Serial.print(',');
+    Serial.print(gz_deg, 6);   Serial.print(',');
+
+    Serial.print(roll_deg, 6); Serial.print(',');
+    Serial.print(pitch_deg, 6);Serial.print(',');
+    Serial.print(yaw_deg, 6);  Serial.print(',');
+
+    Serial.print(ax_lin_mps2, 6); Serial.print(',');
+    Serial.print(ay_lin_mps2, 6); Serial.print(',');
+    Serial.print(az_lin_mps2, 6);
 
     Serial.println();
+    
+    telemetryUpdate(payload, 7);
+
+    
+
 }
