@@ -76,7 +76,7 @@ df = pd.DataFrame({
     'Sv [m^2] (from Vv)': Sv_from_Vv,
     'Sv [m^2] (from Cn_beta)': Sv_from_Cnb
 })
-df.to_csv('Log/Vertical_Stabilizer/gamma_vs_lv_Vv_and_Cnb.csv', index=False)
+df.to_csv('Aerodynamic_Optimization/Log/Vertical_Stabilizer/gamma_vs_lv_Vv_and_Cnb.csv', index=False)
 print('Saved: gamma_vs_lv_Vv_and_Cnb.csv')
 print(f'Λ_LE = {LambdaLE:.2f} deg, Λ_c/4 = {Lambda_c4:.2f} deg, a_v = {a_v:.3f} rad^-1')
 print(f'Intersection ~ l_v={lv_i:.3f} m, gamma={gam_i:.3f}, Sv={Sv_i*1e4:.1f} cm^2')

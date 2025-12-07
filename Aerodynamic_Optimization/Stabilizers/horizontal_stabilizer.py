@@ -34,11 +34,11 @@ beta_VH = VH_target * MAC / l_h
 # l_h = [CLw*Sw*(xac_w - xCG) + Cm_ac*Sw*MAC] / (CLh * S_h)
 # => beta_trim = [CLw*(xac_w - xCG) + Cm_ac*MAC] / (CLh * l_h)
 num = CLw*(xac_w - xCG) + Cm_ac*MAC
-beta_trim = num / (CLh_as * l_h)
+#beta_trim = num / (CLh_as * l_h)
 
 # Restrições simples
 beta_VH[beta_VH <= 0] = np.nan
-beta_trim[beta_trim <= 0] = np.nan
+#beta_trim[beta_trim <= 0] = np.nan
 
 # ==========================
 # Guardar CSV
@@ -46,11 +46,12 @@ beta_trim[beta_trim <= 0] = np.nan
 df = pd.DataFrame({
     'l_h [m]': l_h,
     'beta_from_VH': beta_VH,
-    'beta_from_trim(CLh={:.2f})'.format(CLh_as): beta_trim,
+    #'beta_from_trim(CLh={:.2f})'.format(CLh_as): beta_trim,
     'VH_target': np.full_like(l_h, VH_target),
 })
-df.to_csv('Log/Horizontal_Stabilizer/beta_vs_lh_VH_and_trim.csv', index=False)
-print("CSV guardado: beta_vs_lh_VH_and_trim.csv")
+
+df.to_csv('Aerodynamic_Optimization/Log/Horizontal_Stabilizer/beta_vs_lh_VH_and_trim.csv', index=False)
+
 
 # ==========================
 # Plot
