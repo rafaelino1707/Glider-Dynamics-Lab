@@ -1,19 +1,13 @@
 #include <Arduino.h>
-#include <ArduinoBLE.h>  // <-- ADICIONA ISTO
 #include "imu.h"
 #include "madgwick.h"
 #include "orientation.h"
-#include "telemetry.h"
+#include "telemetry.h"   // se já o tens; se não, remove esta linha e as partes de BLE
 
-// ---------- Configuração do Madgwick ----------
 MadgwickAHRS filter(100.0f, 0.1f); // 100 Hz, beta = 0.1
 
-const float    SAMPLE_FREQ      = 100.0f;               // Hz
-const uint32_t SAMPLE_PERIOD_US = 1000000UL / 100;      // 100 Hz
-
-// ---------- Janela de logging ----------
-const uint32_t START_LOG_MS    = 120000UL;  // começa a logar aos 120 s
-const uint32_t LOG_DURATION_MS = 30000UL;   // loga durante 30 s (até 150 s)
+const float SAMPLE_FREQ = 100.0f;                     // Hz
+const uint32_t SAMPLE_PERIOD_US = 1000000UL / 100;   // 100 Hz
 
 void setup() {
     Serial.begin(115200);
@@ -29,6 +23,7 @@ void setup() {
     }
     Serial.println("IMU OK");
 
+    // Se estiveres a usar BLE:
     if (!telemetryBegin()) {
         Serial.println("BLE init failed");
         while (1) {
@@ -39,21 +34,15 @@ void setup() {
 }
 
 void loop() {
-    // --------- manter BLE vivo SEMPRE ---------
-    BLE.poll();
-
-    // --------- controlo de frequência (100 Hz) ---------
     static uint32_t last = micros();
     uint32_t now = micros();
-    uint32_t dt  = now - last;
+    uint32_t dt = now - last;
     if (dt < SAMPLE_PERIOD_US) {
-        // mantém o comportamento antigo
         delayMicroseconds(SAMPLE_PERIOD_US - dt);
         return;
     }
     last = micros();
 
-    // --------- leitura IMU ---------
     float ax, ay, az;
     float gx, gy, gz;    // em rad/s (para Madgwick)
     float mx, my, mz;
@@ -83,7 +72,7 @@ void loop() {
     float pitch_deg = pitch_rad * rad2deg;
     float yaw_deg   = yaw_rad   * rad2deg;
 
-    // Gyro em deg/s
+    // Gyro em deg/s para impressão (internamente está em rad/s)
     float gx_deg = gx * rad2deg;
     float gy_deg = gy * rad2deg;
     float gz_deg = gz * rad2deg;
@@ -92,7 +81,17 @@ void loop() {
     float ax_lin, ay_lin, az_lin;
     removeGravityFromAccel(qw, qx, qy, qz, ax, ay, az, ax_lin, ay_lin, az_lin);
 
-    // Conversão para m/s²
+    // Pacote simples para BLE (mantendo 7 floats: q + accel bruta)
+    float payload[7];
+    payload[0] = qw;
+    payload[1] = qx;
+    payload[2] = qy;
+    payload[3] = qz;
+    payload[4] = ax;
+    payload[5] = ay;
+    payload[6] = az;
+    telemetryUpdate(payload, 7);
+
     const float g0 = 9.81f;
 
     float ax_mps2     = ax     * g0;
@@ -104,30 +103,8 @@ void loop() {
 
     uint32_t t_ms = millis();
 
-    // --------- janela de logging (2 min a 2.5 min) ---------
-    bool in_logging_window =
-        (t_ms >= START_LOG_MS) &&
-        (t_ms <= (START_LOG_MS + LOG_DURATION_MS));
+ 
 
-    if (!in_logging_window) {
-        // Fora da janela:
-        // IMU + Madgwick correm, BLE.stack é servida, mas NÃO há envio/log
-        return;
-    }
-
-    // --------- payload BLE (7 floats: q + accel bruta) ---------
-    float payload[7];
-    payload[0] = qw;
-    payload[1] = qx;
-    payload[2] = qy;
-    payload[3] = qz;
-    payload[4] = ax;
-    payload[5] = ay;
-    payload[6] = az;
-
-    telemetryUpdate(payload, 7);  // BLE só dentro da janela
-
-    // --------- CSV na Serial ---------
     Serial.print(t_ms);        Serial.print(',');
     Serial.print(qw, 6);       Serial.print(',');
     Serial.print(qx, 6);       Serial.print(',');
@@ -142,13 +119,18 @@ void loop() {
     Serial.print(gy_deg, 6);   Serial.print(',');
     Serial.print(gz_deg, 6);   Serial.print(',');
 
-    Serial.print(roll_deg, 6);   Serial.print(',');
-    Serial.print(pitch_deg, 6);  Serial.print(',');
-    Serial.print(yaw_deg, 6);    Serial.print(',');
+    Serial.print(roll_deg, 6); Serial.print(',');
+    Serial.print(pitch_deg, 6);Serial.print(',');
+    Serial.print(yaw_deg, 6);  Serial.print(',');
 
     Serial.print(ax_lin_mps2, 6); Serial.print(',');
     Serial.print(ay_lin_mps2, 6); Serial.print(',');
     Serial.print(az_lin_mps2, 6);
 
     Serial.println();
+    
+    telemetryUpdate(payload, 7);
+
+    
+
 }

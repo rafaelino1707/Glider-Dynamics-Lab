@@ -1,7 +1,12 @@
 #include "telemetry.h"
 #include <ArduinoBLE.h>
 
-// UUIDs custom
+// -----------------------------------------------------
+// Estado da ligação BLE
+// -----------------------------------------------------
+static bool g_bleConnected = false;
+
+// UUIDs custom (mantive os teus)
 static BLEService imuService("12345678-1234-1234-1234-1234567890AB");
 
 static BLECharacteristic imuChar(
@@ -10,6 +15,13 @@ static BLECharacteristic imuChar(
     28    // 7 floats * 4 bytes
 );
 
+// Prototipos dos callbacks
+static void onBleConnect(BLEDevice central);
+static void onBleDisconnect(BLEDevice central);
+
+// -----------------------------------------------------
+// Inicialização do BLE / Telemetria
+// -----------------------------------------------------
 bool telemetryBegin() {
     if (!BLE.begin()) {
         return false;
@@ -22,23 +34,58 @@ bool telemetryBegin() {
     imuService.addCharacteristic(imuChar);
     BLE.addService(imuService);
 
-    // valor inicial
-    uint8_t zero[4] = {0};
-    imuChar.writeValue(zero, 4);
+    // valor inicial (zeros)
+    uint8_t zero[28] = {0};
+    imuChar.writeValue(zero, sizeof(zero));
 
+    // callbacks de ligação
+    BLE.setEventHandler(BLEConnected,    onBleConnect);
+    BLE.setEventHandler(BLEDisconnected, onBleDisconnect);
+
+    g_bleConnected = false;
     BLE.advertise();
     return true;
 }
 
+// -----------------------------------------------------
+// Enviar amostra por BLE
+// -----------------------------------------------------
 void telemetryUpdate(const float* data, size_t len) {
     if (len == 0) return;
 
     const size_t bytes = len * sizeof(float);
     if (bytes > 28) return; // 7 floats no máximo
 
+    // se quiseres, podes enviar mesmo não estando ligado,
+    // mas normalmente faz-se o check:
+    if (!g_bleConnected) {
+        BLE.poll();  // mantém stack viva
+        return;
+    }
+
     uint8_t buf[28];
     memcpy(buf, data, bytes);
 
     imuChar.writeValue(buf, bytes);
-    BLE.poll();  // ajuda a manter a stack BLE viva
+
+    // necessário para manter a stack BLE a processar eventos
+    BLE.poll();
+}
+
+// -----------------------------------------------------
+// Estado da ligação BLE (usado no loop principal)
+// -----------------------------------------------------
+bool telemetryIsConnected() {
+    return g_bleConnected;
+}
+
+// -----------------------------------------------------
+// Callbacks de ligação/desligação
+// -----------------------------------------------------
+static void onBleConnect(BLEDevice central) {
+    g_bleConnected = true;
+}
+
+static void onBleDisconnect(BLEDevice central) {
+    g_bleConnected = false;
 }
