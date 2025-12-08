@@ -9,7 +9,7 @@
 // Operation Mode
 // -----------------------------------------------------
 // 1 = "eco" mode: only sends data between 120 s and 150 s since boot
-// 0 = always sending data (without time window)
+// 0 = always sending data (no time window)
 #define ECO_MODE 1
 
 // -----------------------------------------------------
@@ -21,14 +21,14 @@ const float    SAMPLE_FREQ      = 100.0f;               // Hz
 const uint32_t SAMPLE_PERIOD_US = 1000000UL / 100;      // 100 Hz
 
 // -----------------------------------------------------
-// Janela de logging (só usada se ECO_MODE == 1)
+// Logging window (only used if ECO_MODE == 1)
 // -----------------------------------------------------
 const uint32_t START_LOG_MS    = 120000UL;  // Starts logging at 120 s
-const uint32_t LOG_DURATION_MS = 30000UL;   // Logging through 30 s (until 150 s)
+const uint32_t LOG_DURATION_MS = 30000UL;   // Logs for 30 s (until 150 s)
 
 // -----------------------------------------------------
-// Logging in RAM (backup if BLE fails)
-// Save: t_ms, q, accel bruta (g), gyro (rad/s), mag
+// RAM Logging (backup if BLE fails)
+// Saves: t_ms, q, raw accel (g), gyro (rad/s), mag
 // -----------------------------------------------------
 struct Sample {
     uint32_t t_ms;
@@ -44,7 +44,7 @@ constexpr size_t LOG_MAX_SAMPLES = 2000;
 Sample g_logBuf[LOG_MAX_SAMPLES];
 size_t g_logCount = 0;
 
-// Log dump in RAM through Serial Monitor (CSV)
+// Dump RAM log to Serial Monitor (CSV)
 void dumpRamLogToSerial() {
     Serial.println("t_ms,qw,qx,qy,qz,ax,ay,az,gx,gy,gz,mx,my,mz");
 
@@ -160,7 +160,7 @@ void loop() {
     float ax_lin, ay_lin, az_lin;
     removeGravityFromAccel(qw, qx, qy, qz, ax, ay, az, ax_lin, ay_lin, az_lin);
 
-    // Convertion to m/s²
+    // Conversion to m/s²
     const float g0 = 9.81f;
 
     float ax_mps2     = ax     * g0;
@@ -172,24 +172,35 @@ void loop() {
 
     uint32_t t_ms = millis();
 
-    // --------- logging / sending Window ---------
+    // --------- Logging / sending window ---------
     bool in_logging_window = true;
 
 #if ECO_MODE
+    // ECO_MODE = 1  → logs only between 120 s and 150 s
     in_logging_window =
         (t_ms >= START_LOG_MS) &&
         (t_ms <= (START_LOG_MS + LOG_DURATION_MS));
 #endif
 
+    // ----- RAM logger decision -----
+    bool log_to_ram = false;
+
+#if ECO_MODE
+    // In flight (ECO_MODE=1) logs to RAM only inside the window
+    log_to_ram = in_logging_window;
+#else
+    // In test mode (ECO_MODE=0) never uses RAM
+    log_to_ram = false;
+#endif
+
+    // If outside logging window (in ECO_MODE=1),
+    // do nothing (IMU + Madgwick still run).
     if (!in_logging_window) {
-        // Out of ECO Mode window:
-        // IMU + Madgwick run and BLE.poll() is called,
-        // Nothing send by Serial or BLE;
         return;
     }
 
-    // --------- logging in RAM (backup) ---------
-    if (g_logCount < LOG_MAX_SAMPLES) {
+    // --------- RAM logging (backup, only if log_to_ram=true) ---------
+    if (log_to_ram && g_logCount < LOG_MAX_SAMPLES) {
         Sample &s = g_logBuf[g_logCount++];
 
         s.t_ms = t_ms;
@@ -212,10 +223,10 @@ void loop() {
         s.mz = mz;
     }
 
-    // --------- payload BLE complete (14 floats) ---------
+    // --------- Full BLE payload (14 floats) ---------
     // [ t_ms, qw, qx, qy, qz, ax, ay, az, gx, gy, gz, mx, my, mz ]
     float payload[14];
-    payload[0]  = (float)t_ms;  // timestamp [ms] (float)
+    payload[0]  = (float)t_ms;  // timestamp [ms]
     payload[1]  = qw;
     payload[2]  = qx;
     payload[3]  = qy;
@@ -232,7 +243,7 @@ void loop() {
 
     telemetryUpdate(payload, 14);
 
-    // --------- CSV on Serial ---------
+    // --------- CSV over Serial ---------
     Serial.print(t_ms);        Serial.print(',');
     Serial.print(qw, 6);       Serial.print(',');
     Serial.print(qx, 6);       Serial.print(',');
