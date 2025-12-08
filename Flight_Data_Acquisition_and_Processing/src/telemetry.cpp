@@ -6,16 +6,16 @@
 // -----------------------------------------------------
 static bool g_bleConnected = false;
 
-// UUIDs custom (mantive os teus)
+// UUIDs custom
 static BLEService imuService("12345678-1234-1234-1234-1234567890AB");
 
 static BLECharacteristic imuChar(
     "12345678-1234-1234-1234-1234567890AC",
     BLERead | BLENotify,
-    28    // 7 floats * 4 bytes
+    56    // 14 floats * 4 bytes
 );
 
-// Prototipos dos callbacks
+// Protótipos dos callbacks
 static void onBleConnect(BLEDevice central);
 static void onBleDisconnect(BLEDevice central);
 
@@ -35,7 +35,7 @@ bool telemetryBegin() {
     BLE.addService(imuService);
 
     // valor inicial (zeros)
-    uint8_t zero[28] = {0};
+    uint8_t zero[56] = {0};
     imuChar.writeValue(zero, sizeof(zero));
 
     // callbacks de ligação
@@ -54,21 +54,12 @@ void telemetryUpdate(const float* data, size_t len) {
     if (len == 0) return;
 
     const size_t bytes = len * sizeof(float);
-    if (bytes > 28) return; // 7 floats no máximo
+    if (bytes > 56) return; // 14 floats no máximo
 
-    // se quiseres, podes enviar mesmo não estando ligado,
-    // mas normalmente faz-se o check:
-    if (!g_bleConnected) {
-        BLE.poll();  // mantém stack viva
-        return;
-    }
-
-    uint8_t buf[28];
+    uint8_t buf[56];
     memcpy(buf, data, bytes);
 
     imuChar.writeValue(buf, bytes);
-
-    // necessário para manter a stack BLE a processar eventos
     BLE.poll();
 }
 

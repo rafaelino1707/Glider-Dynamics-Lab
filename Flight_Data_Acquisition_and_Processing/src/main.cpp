@@ -1,19 +1,78 @@
 #include <Arduino.h>
-#include <ArduinoBLE.h>  // <-- ADICIONA ISTO
+#include <ArduinoBLE.h>
 #include "imu.h"
 #include "madgwick.h"
 #include "orientation.h"
 #include "telemetry.h"
 
-// ---------- Configuração do Madgwick ----------
+// -----------------------------------------------------
+// Modo de operação
+// -----------------------------------------------------
+// 1 = modo "eco": só envia entre 120 s e 150 s após o boot
+// 0 = envia SEMPRE (sem janela de tempo)
+#define ECO_MODE 1
+
+// -----------------------------------------------------
+// Configuração do Madgwick
+// -----------------------------------------------------
 MadgwickAHRS filter(100.0f, 0.1f); // 100 Hz, beta = 0.1
 
 const float    SAMPLE_FREQ      = 100.0f;               // Hz
 const uint32_t SAMPLE_PERIOD_US = 1000000UL / 100;      // 100 Hz
 
-// ---------- Janela de logging ----------
+// -----------------------------------------------------
+// Janela de logging (só usada se ECO_MODE == 1)
+// -----------------------------------------------------
 const uint32_t START_LOG_MS    = 120000UL;  // começa a logar aos 120 s
 const uint32_t LOG_DURATION_MS = 30000UL;   // loga durante 30 s (até 150 s)
+
+// -----------------------------------------------------
+// Logging em RAM (backup se BLE falhar)
+// Guarda: t_ms, q, accel bruta (g), gyro (rad/s), mag
+// -----------------------------------------------------
+struct Sample {
+    uint32_t t_ms;
+    float qw, qx, qy, qz;
+    float ax, ay, az;      // em g (como vem da IMU)
+    float gx, gy, gz;      // em rad/s
+    float mx, my, mz;      // magnetómetro
+};
+
+// Ajusta se precisares (2000 ≈ 20 s a 100 Hz)
+constexpr size_t LOG_MAX_SAMPLES = 2000;
+
+Sample g_logBuf[LOG_MAX_SAMPLES];
+size_t g_logCount = 0;
+
+// Dump do log em RAM pela Serial (CSV simples)
+void dumpRamLogToSerial() {
+    Serial.println("t_ms,qw,qx,qy,qz,ax,ay,az,gx,gy,gz,mx,my,mz");
+
+    for (size_t i = 0; i < g_logCount; ++i) {
+        const Sample &s = g_logBuf[i];
+
+        Serial.print(s.t_ms); Serial.print(',');
+
+        Serial.print(s.qw, 6); Serial.print(',');
+        Serial.print(s.qx, 6); Serial.print(',');
+        Serial.print(s.qy, 6); Serial.print(',');
+        Serial.print(s.qz, 6); Serial.print(',');
+
+        Serial.print(s.ax, 6); Serial.print(',');
+        Serial.print(s.ay, 6); Serial.print(',');
+        Serial.print(s.az, 6); Serial.print(',');
+
+        Serial.print(s.gx, 6); Serial.print(',');
+        Serial.print(s.gy, 6); Serial.print(',');
+        Serial.print(s.gz, 6); Serial.print(',');
+
+        Serial.print(s.mx, 6); Serial.print(',');
+        Serial.print(s.my, 6); Serial.print(',');
+        Serial.print(s.mz, 6);
+
+        Serial.println();
+    }
+}
 
 void setup() {
     Serial.begin(115200);
@@ -39,6 +98,16 @@ void setup() {
 }
 
 void loop() {
+    // --------- comando pela Serial: 'D' → dump RAM ---------
+    if (Serial.available() > 0) {
+        int c = Serial.read();
+        if (c == 'D' || c == 'd') {
+            Serial.println("=== RAM LOG DUMP BEGIN ===");
+            dumpRamLogToSerial();
+            Serial.println("=== RAM LOG DUMP END ===");
+        }
+    }
+
     // --------- manter BLE vivo SEMPRE ---------
     BLE.poll();
 
@@ -60,7 +129,7 @@ void loop() {
 
     imuRead(ax, ay, az, gx, gy, gz, mx, my, mz);
 
-    // Atualizar Madgwick
+    // --------- Atualizar Madgwick ---------
     if (mx == 0.0f && my == 0.0f && mz == 0.0f) {
         filter.updateIMU(gx, gy, gz, ax, ay, az);
     } else {
@@ -83,7 +152,7 @@ void loop() {
     float pitch_deg = pitch_rad * rad2deg;
     float yaw_deg   = yaw_rad   * rad2deg;
 
-    // Gyro em deg/s
+    // Gyro em deg/s (para debug / logging)
     float gx_deg = gx * rad2deg;
     float gy_deg = gy * rad2deg;
     float gz_deg = gz * rad2deg;
@@ -104,28 +173,65 @@ void loop() {
 
     uint32_t t_ms = millis();
 
-    // --------- janela de logging (2 min a 2.5 min) ---------
-    bool in_logging_window =
+    // --------- Janela de logging / envio ---------
+    bool in_logging_window = true;
+
+#if ECO_MODE
+    in_logging_window =
         (t_ms >= START_LOG_MS) &&
         (t_ms <= (START_LOG_MS + LOG_DURATION_MS));
+#endif
 
     if (!in_logging_window) {
-        // Fora da janela:
-        // IMU + Madgwick correm, BLE.stack é servida, mas NÃO há envio/log
+        // Fora da janela em modo ECO:
+        // IMU + Madgwick correm e BLE.poll() é chamado,
+        // mas não enviamos nada nem pela Serial nem por BLE.
         return;
     }
 
-    // --------- payload BLE (7 floats: q + accel bruta) ---------
-    float payload[7];
-    payload[0] = qw;
-    payload[1] = qx;
-    payload[2] = qy;
-    payload[3] = qz;
-    payload[4] = ax;
-    payload[5] = ay;
-    payload[6] = az;
+    // --------- logging em RAM (backup) ---------
+    if (g_logCount < LOG_MAX_SAMPLES) {
+        Sample &s = g_logBuf[g_logCount++];
 
-    telemetryUpdate(payload, 7);  // BLE só dentro da janela
+        s.t_ms = t_ms;
+
+        s.qw = qw;
+        s.qx = qx;
+        s.qy = qy;
+        s.qz = qz;
+
+        s.ax = ax;
+        s.ay = ay;
+        s.az = az;
+
+        s.gx = gx;
+        s.gy = gy;
+        s.gz = gz;
+
+        s.mx = mx;
+        s.my = my;
+        s.mz = mz;
+    }
+
+    // --------- payload BLE completo (14 floats) ---------
+    // [ t_ms, qw, qx, qy, qz, ax, ay, az, gx, gy, gz, mx, my, mz ]
+    float payload[14];
+    payload[0]  = (float)t_ms;  // timestamp em ms (float por simplicidade)
+    payload[1]  = qw;
+    payload[2]  = qx;
+    payload[3]  = qy;
+    payload[4]  = qz;
+    payload[5]  = ax;           // accel em g (ou troca para ax_mps2 se preferires)
+    payload[6]  = ay;
+    payload[7]  = az;
+    payload[8]  = gx;           // gyro em rad/s
+    payload[9]  = gy;
+    payload[10] = gz;
+    payload[11] = mx;           // magnetómetro (µT, conforme devolve o imuRead)
+    payload[12] = my;
+    payload[13] = mz;
+
+    telemetryUpdate(payload, 14);
 
     // --------- CSV na Serial ---------
     Serial.print(t_ms);        Serial.print(',');
