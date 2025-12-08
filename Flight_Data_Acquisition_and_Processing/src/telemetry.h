@@ -3,5 +3,5 @@
 #include <ArduinoBLE.h>
 
 bool telemetryBegin();
-void telemetryUpdate(const float* data, size_t len); // len = número de floats
+void telemetryUpdate(const float* data, size_t len); // len = number of floats
 bool telemetryIsConnected();

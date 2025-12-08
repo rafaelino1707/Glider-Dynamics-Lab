@@ -14,36 +14,36 @@ LOG_DIR = "log"
 
 def prepare_log_file() -> str:
     """
-    Garante que a pasta log/ existe, apaga o ficheiro mais antigo
-    se já houver mais de MAX_LOG_FILES, e devolve o caminho para
-    um novo ficheiro CSV com timestamp no nome.
+    Ensures that the folder log/ exists, deletes the oldest file
+    if there are already more than MAX_LOG_FILES, and returns the
+    path for a new CSV file with a timestamp in the name.
     """
     os.makedirs(LOG_DIR, exist_ok=True)
 
-    # lista todos os CSV na pasta log/
+    # list all CSV files in log/
     pattern = os.path.join(LOG_DIR, "*.csv")
     files = glob.glob(pattern)
 
-    # se já há demasiados, apaga os mais antigos
+    # if there are too many, delete the oldest
     if len(files) >= MAX_LOG_FILES:
-        # ordena por data de modificação (mais antigo primeiro)
+        # sort by modification time (oldest first)
         files.sort(key=os.path.getmtime)
         num_to_delete = len(files) - (MAX_LOG_FILES - 1)
         for old_path in files[:num_to_delete]:
             try:
                 os.remove(old_path)
-                print(f"[LOG] Removido log antigo: {old_path}")
+                print(f"[LOG] Removed old log: {old_path}")
             except OSError as e:
-                print(f"[LOG] Erro ao remover {old_path}: {e}")
+                print(f"[LOG] Error removing {old_path}: {e}")
 
-    # cria nome do novo ficheiro com dia e hora
+    # create a new filename with date and time
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{ts}_glider_ble.csv"
     full_path = os.path.join(LOG_DIR, filename)
     return full_path
 
 
-# Dispositivo / UUIDs (iguais ao firmware)
+# Device / UUIDs (same as firmware)
 DEVICE_NAME  = "GliderIMU"
 SERVICE_UUID = "12345678-1234-1234-1234-1234567890AB"
 CHAR_UUID    = "12345678-1234-1234-1234-1234567890AC"
@@ -53,36 +53,36 @@ N_FLOATS = 14
 
 
 async def main():
-    print(f"[+] À procura do dispositivo BLE '{DEVICE_NAME}'...")
+    print(f"[+] Searching for BLE device '{DEVICE_NAME}'...")
 
     device = await BleakScanner.find_device_by_filter(
         lambda d, ad: d.name == DEVICE_NAME
     )
 
     if device is None:
-        print("[-] Dispositivo não encontrado. Garante que está ligado e a anunciar.")
+        print("[-] Device not found. Ensure it is powered and advertising.")
         return
 
-    print(f"[+] Encontrado: {device.name} ({device.address})")
-    print("[+] A ligar...")
+    print(f"[+] Found: {device.name} ({device.address})")
+    print("[+] Connecting...")
 
     async with BleakClient(device) as client:
-        print("[+] Ligado ao dispositivo BLE.")
+        print("[+] Connected to BLE device.")
 
         csv_path = prepare_log_file()
-        print(f"[+] A escrever CSV em: {os.path.abspath(csv_path)}")
+        print(f"[+] Writing CSV to: {os.path.abspath(csv_path)}")
 
-        # abrir CSV NO CAMINHO CERTO
+        # open CSV IN THE CORRECT PATH
         with open(csv_path, mode="w", newline="") as f:
             writer = csv.writer(f)
 
-            # cabeçalho
+            # header
             writer.writerow([
-                "t_imu_ms",          # timestamp do Arduino (ms, float)
-                "pc_timestamp_iso",  # relógio PC
-                "pc_timestamp_s",    # tempo relativo PC
+                "t_imu_ms",          # Arduino timestamp (ms, float)
+                "pc_timestamp_iso",  # PC clock
+                "pc_timestamp_s",    # PC relative time
                 "qw", "qx", "qy", "qz",
-                "ax_raw", "ay_raw", "az_raw",       # em g (ou m/s² se mudares no C++)
+                "ax_raw", "ay_raw", "az_raw",       # in g (or m/s² if changed in C++)
                 "gx_rad_s", "gy_rad_s", "gz_rad_s",
                 "mx_uT", "my_uT", "mz_uT",
             ])
@@ -96,8 +96,8 @@ async def main():
                 expected_len = 4 * N_FLOATS
                 if len(data) != expected_len:
                     print(
-                        f"[-] Tamanho inesperado: {len(data)} bytes "
-                        f"(esperava {expected_len})"
+                        f"[-] Unexpected size: {len(data)} bytes "
+                        f"(expected {expected_len})"
                     )
                     return
 
@@ -114,7 +114,7 @@ async def main():
                 t_rel = t_pc - start_time
                 iso   = datetime.fromtimestamp(t_pc).isoformat()
 
-                # escreve SEMPRE cada pacote
+                # ALWAYS write each packet
                 writer.writerow([
                     f"{t_imu_ms:.1f}",
                     iso,
@@ -124,9 +124,9 @@ async def main():
                     f"{gx:.6f}", f"{gy:.6f}", f"{gz:.6f}",
                     f"{mx:.6f}", f"{my:.6f}", f"{mz:.6f}",
                 ])
-                f.flush()  # força escrever no disco já
+                f.flush()  # force write to disk immediately
 
-                # debug no terminal
+                # terminal debug
                 print(
                     f"{t_rel:8.3f}s  "
                     f"q=({qw:+.3f},{qx:+.3f},{qy:+.3f},{qz:+.3f})  "
@@ -135,18 +135,18 @@ async def main():
                     f"m=({mx:+.3f},{my:+.3f},{mz:+.3f})"
                 )
 
-            print(f"[+] A subscrever notificações na characteristic {CHAR_UUID}...")
+            print(f"[+] Subscribing to notifications on characteristic {CHAR_UUID}...")
             await client.start_notify(CHAR_UUID, notification_handler)
 
-            print("[+] A receber dados. Ctrl+C para parar.")
+            print("[+] Receiving data. Ctrl+C to stop.")
             try:
                 while True:
                     await asyncio.sleep(1.0)
             except KeyboardInterrupt:
-                print("\n[+] A parar notificações...")
+                print("\n[+] Stopping notifications...")
                 await client.stop_notify(CHAR_UUID)
 
-        print(f"[+] Log terminado. Ficheiro CSV: {csv_path}")
+        print(f"[+] Log finished. CSV file: {csv_path}")
 
 
 if __name__ == "__main__":

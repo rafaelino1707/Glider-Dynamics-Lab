@@ -1,7 +1,7 @@
 #include "imu.h"
 #include <Arduino_BMI270_BMM150.h>
 
-// Wrapper simples
+// Wrapper
 
 bool imuBegin() {
     if (!IMU.begin()) {
@@ -35,6 +35,5 @@ void imuRead(float& ax, float& ay, float& az,
 
     if (IMU.magneticFieldAvailable()) {
         IMU.readMagneticField(mx, my, mz);
-        // Em microTesla, ok para Madgwick
     }
 }

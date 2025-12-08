@@ -6,14 +6,14 @@
 #include "telemetry.h"
 
 // -----------------------------------------------------
-// Modo de operação
+// Operation Mode
 // -----------------------------------------------------
-// 1 = modo "eco": só envia entre 120 s e 150 s após o boot
-// 0 = envia SEMPRE (sem janela de tempo)
+// 1 = "eco" mode: only sends data between 120 s and 150 s since boot
+// 0 = always sending data (without time window)
 #define ECO_MODE 1
 
 // -----------------------------------------------------
-// Configuração do Madgwick
+// Madgwick Configuration
 // -----------------------------------------------------
 MadgwickAHRS filter(100.0f, 0.1f); // 100 Hz, beta = 0.1
 
@@ -23,28 +23,28 @@ const uint32_t SAMPLE_PERIOD_US = 1000000UL / 100;      // 100 Hz
 // -----------------------------------------------------
 // Janela de logging (só usada se ECO_MODE == 1)
 // -----------------------------------------------------
-const uint32_t START_LOG_MS    = 120000UL;  // começa a logar aos 120 s
-const uint32_t LOG_DURATION_MS = 30000UL;   // loga durante 30 s (até 150 s)
+const uint32_t START_LOG_MS    = 120000UL;  // Starts logging at 120 s
+const uint32_t LOG_DURATION_MS = 30000UL;   // Logging through 30 s (until 150 s)
 
 // -----------------------------------------------------
-// Logging em RAM (backup se BLE falhar)
-// Guarda: t_ms, q, accel bruta (g), gyro (rad/s), mag
+// Logging in RAM (backup if BLE fails)
+// Save: t_ms, q, accel bruta (g), gyro (rad/s), mag
 // -----------------------------------------------------
 struct Sample {
     uint32_t t_ms;
     float qw, qx, qy, qz;
-    float ax, ay, az;      // em g (como vem da IMU)
-    float gx, gy, gz;      // em rad/s
-    float mx, my, mz;      // magnetómetro
+    float ax, ay, az;      //  g 
+    float gx, gy, gz;      //  rad/s
+    float mx, my, mz;      // magnetometer
 };
 
-// Ajusta se precisares (2000 ≈ 20 s a 100 Hz)
+// RAM Log max samples 
 constexpr size_t LOG_MAX_SAMPLES = 2000;
 
 Sample g_logBuf[LOG_MAX_SAMPLES];
 size_t g_logCount = 0;
 
-// Dump do log em RAM pela Serial (CSV simples)
+// Log dump in RAM through Serial Monitor (CSV)
 void dumpRamLogToSerial() {
     Serial.println("t_ms,qw,qx,qy,qz,ax,ay,az,gx,gy,gz,mx,my,mz");
 
@@ -98,7 +98,7 @@ void setup() {
 }
 
 void loop() {
-    // --------- comando pela Serial: 'D' → dump RAM ---------
+    // --------- Serial Command: 'D' → dump RAM ---------
     if (Serial.available() > 0) {
         int c = Serial.read();
         if (c == 'D' || c == 'd') {
@@ -108,60 +108,59 @@ void loop() {
         }
     }
 
-    // --------- manter BLE vivo SEMPRE ---------
+    // --------- Always keeping BLE alive ---------
     BLE.poll();
 
-    // --------- controlo de frequência (100 Hz) ---------
+    // --------- Frequency control (100 Hz) ---------
     static uint32_t last = micros();
     uint32_t now = micros();
     uint32_t dt  = now - last;
     if (dt < SAMPLE_PERIOD_US) {
-        // mantém o comportamento antigo
         delayMicroseconds(SAMPLE_PERIOD_US - dt);
         return;
     }
     last = micros();
 
-    // --------- leitura IMU ---------
+    // --------- IMU Reading ---------
     float ax, ay, az;
-    float gx, gy, gz;    // em rad/s (para Madgwick)
+    float gx, gy, gz;    // rad/s (for Madgwick)
     float mx, my, mz;
 
     imuRead(ax, ay, az, gx, gy, gz, mx, my, mz);
 
-    // --------- Atualizar Madgwick ---------
+    // --------- Updating Madgwick ---------
     if (mx == 0.0f && my == 0.0f && mz == 0.0f) {
         filter.updateIMU(gx, gy, gz, ax, ay, az);
     } else {
         filter.update(gx, gy, gz, ax, ay, az, mx, my, mz);
     }
 
-    // Quaternion atual
+    // Actual Quaternion
     float qw = filter.q0;
     float qx = filter.q1;
     float qy = filter.q2;
     float qz = filter.q3;
 
-    // Euler (rad)
+    // Euler [rad]
     float roll_rad, pitch_rad, yaw_rad;
     quatToEulerZYX(qw, qx, qy, qz, roll_rad, pitch_rad, yaw_rad);
 
-    // Euler em graus
+    // Euler [deg]
     const float rad2deg = 180.0f / PI;
     float roll_deg  = roll_rad  * rad2deg;
     float pitch_deg = pitch_rad * rad2deg;
     float yaw_deg   = yaw_rad   * rad2deg;
 
-    // Gyro em deg/s (para debug / logging)
+    // Gyro [deg/s] (debug / logging)
     float gx_deg = gx * rad2deg;
     float gy_deg = gy * rad2deg;
     float gz_deg = gz * rad2deg;
 
-    // Aceleração linear (sem gravidade) em "g"
+    // Linear Acceleration (without gravity)
     float ax_lin, ay_lin, az_lin;
     removeGravityFromAccel(qw, qx, qy, qz, ax, ay, az, ax_lin, ay_lin, az_lin);
 
-    // Conversão para m/s²
+    // Convertion to m/s²
     const float g0 = 9.81f;
 
     float ax_mps2     = ax     * g0;
@@ -173,7 +172,7 @@ void loop() {
 
     uint32_t t_ms = millis();
 
-    // --------- Janela de logging / envio ---------
+    // --------- logging / sending Window ---------
     bool in_logging_window = true;
 
 #if ECO_MODE
@@ -183,13 +182,13 @@ void loop() {
 #endif
 
     if (!in_logging_window) {
-        // Fora da janela em modo ECO:
-        // IMU + Madgwick correm e BLE.poll() é chamado,
-        // mas não enviamos nada nem pela Serial nem por BLE.
+        // Out of ECO Mode window:
+        // IMU + Madgwick run and BLE.poll() is called,
+        // Nothing send by Serial or BLE;
         return;
     }
 
-    // --------- logging em RAM (backup) ---------
+    // --------- logging in RAM (backup) ---------
     if (g_logCount < LOG_MAX_SAMPLES) {
         Sample &s = g_logBuf[g_logCount++];
 
@@ -213,27 +212,27 @@ void loop() {
         s.mz = mz;
     }
 
-    // --------- payload BLE completo (14 floats) ---------
+    // --------- payload BLE complete (14 floats) ---------
     // [ t_ms, qw, qx, qy, qz, ax, ay, az, gx, gy, gz, mx, my, mz ]
     float payload[14];
-    payload[0]  = (float)t_ms;  // timestamp em ms (float por simplicidade)
+    payload[0]  = (float)t_ms;  // timestamp [ms] (float)
     payload[1]  = qw;
     payload[2]  = qx;
     payload[3]  = qy;
     payload[4]  = qz;
-    payload[5]  = ax;           // accel em g (ou troca para ax_mps2 se preferires)
+    payload[5]  = ax;           // accel [g]
     payload[6]  = ay;
     payload[7]  = az;
-    payload[8]  = gx;           // gyro em rad/s
+    payload[8]  = gx;           // gyro [rad/s]
     payload[9]  = gy;
     payload[10] = gz;
-    payload[11] = mx;           // magnetómetro (µT, conforme devolve o imuRead)
+    payload[11] = mx;           // magnetometer [µT]
     payload[12] = my;
     payload[13] = mz;
 
     telemetryUpdate(payload, 14);
 
-    // --------- CSV na Serial ---------
+    // --------- CSV on Serial ---------
     Serial.print(t_ms);        Serial.print(',');
     Serial.print(qw, 6);       Serial.print(',');
     Serial.print(qx, 6);       Serial.print(',');

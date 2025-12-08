@@ -2,7 +2,7 @@
 #include <ArduinoBLE.h>
 
 // -----------------------------------------------------
-// Estado da ligação BLE
+// Connection State BLE
 // -----------------------------------------------------
 static bool g_bleConnected = false;
 
@@ -15,12 +15,12 @@ static BLECharacteristic imuChar(
     56    // 14 floats * 4 bytes
 );
 
-// Protótipos dos callbacks
+// callbacks prototypes
 static void onBleConnect(BLEDevice central);
 static void onBleDisconnect(BLEDevice central);
 
 // -----------------------------------------------------
-// Inicialização do BLE / Telemetria
+// Telemetry/BLE inicialization
 // -----------------------------------------------------
 bool telemetryBegin() {
     if (!BLE.begin()) {
@@ -34,11 +34,11 @@ bool telemetryBegin() {
     imuService.addCharacteristic(imuChar);
     BLE.addService(imuService);
 
-    // valor inicial (zeros)
+    // Initial values
     uint8_t zero[56] = {0};
     imuChar.writeValue(zero, sizeof(zero));
 
-    // callbacks de ligação
+    // Connection callbacks
     BLE.setEventHandler(BLEConnected,    onBleConnect);
     BLE.setEventHandler(BLEDisconnected, onBleDisconnect);
 
@@ -48,13 +48,13 @@ bool telemetryBegin() {
 }
 
 // -----------------------------------------------------
-// Enviar amostra por BLE
+// Sending data through BLE
 // -----------------------------------------------------
 void telemetryUpdate(const float* data, size_t len) {
     if (len == 0) return;
 
     const size_t bytes = len * sizeof(float);
-    if (bytes > 56) return; // 14 floats no máximo
+    if (bytes > 56) return; // Maximum of 14 floats
 
     uint8_t buf[56];
     memcpy(buf, data, bytes);
@@ -64,14 +64,14 @@ void telemetryUpdate(const float* data, size_t len) {
 }
 
 // -----------------------------------------------------
-// Estado da ligação BLE (usado no loop principal)
+// Connectin State BLE 
 // -----------------------------------------------------
 bool telemetryIsConnected() {
     return g_bleConnected;
 }
 
 // -----------------------------------------------------
-// Callbacks de ligação/desligação
+// Callbacks of Connection
 // -----------------------------------------------------
 static void onBleConnect(BLEDevice central) {
     g_bleConnected = true;
