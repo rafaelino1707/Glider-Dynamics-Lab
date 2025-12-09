@@ -2,8 +2,8 @@ import serial
 import csv
 import time
 
-PORT = "COM7"         # ajusta se for outra COM
-BAUD = 115200         # igual ao do Nano
+PORT = "COM7"         # adjust if using another COM
+BAUD = 115200         # same as on the Nano
 OUTPUT = "ram_dump.csv"
 
 def main():
@@ -11,19 +11,19 @@ def main():
          open(OUTPUT, "w", newline="") as f:
 
         writer = csv.writer(f)
-        writer.writerow(["raw_line"])  # cabeçalho
+        writer.writerow(["raw_line"])  # header
 
-        # limpa lixo que possa estar no buffer
+        # clear any garbage that may be in the buffer
         ser.reset_input_buffer()
 
-        print(f"[+] Porta aberta {PORT} @ {BAUD}")
-        print("[+] A enviar comando 'D' para pedir o dump...\n")
+        print(f"[+] Port opened {PORT} @ {BAUD}")
+        print("[+] Sending command 'D' to request RAM dump...\n")
 
-        # aqui é o equivalente a escrever D no Serial Monitor
-        ser.write(b"D")      # se no teu código precisa de ENTER, usa b"D\n"
+        # this is equivalent to typing 'D' in Serial Monitor
+        ser.write(b"D")      # if your firmware needs ENTER, use b"D\n"
         ser.flush()
 
-        # agora lemos até ficar em silêncio durante alguns segundos
+        # now we read until it stays silent for a few seconds
         max_quiet_s = 3.0
         last_rx = time.time()
 
@@ -38,16 +38,16 @@ def main():
                     print(text)
                     writer.writerow([text])
                 else:
-                    # se não veio nada durante max_quiet_s, assumimos que acabou o dump
+                    # if nothing arrives for max_quiet_s, assume dump is finished
                     if now - last_rx > max_quiet_s:
-                        print("\n[+] Sem dados há mais de "
-                              f"{max_quiet_s:.1f}s, a assumir fim do dump.")
+                        print("\n[+] No data for more than "
+                              f"{max_quiet_s:.1f}s, assuming end of dump.")
                         break
 
         except KeyboardInterrupt:
-            print("\n[+] Interrompido pelo utilizador.")
+            print("\n[+] Interrupted by user.")
 
-        print(f"[+] Terminado. Ficheiro guardado em: {OUTPUT}")
+        print(f"[+] Done. File saved to: {OUTPUT}")
 
 if __name__ == "__main__":
     main()
