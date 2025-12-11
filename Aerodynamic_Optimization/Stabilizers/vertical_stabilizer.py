@@ -16,7 +16,7 @@ dSigma_dBeta = 0.20   # sidewash gradient
 b_v      = 0.052      # fin height [m] (use your value)
 c_r      = 0.05      # root chord [m]
 c_t      = 0.0305      # tip chord [m]
-LambdaLE = 15.0       # LE sweep [deg]      
+LambdaLE = 12.0       # LE sweep [deg]      
 
 # aerodynamic constants
 e_oswald = 0.9     # tail efficiency
