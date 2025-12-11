@@ -11,15 +11,15 @@
 // 0 = always send (no time window), no RAM logging
 // 1 = "eco": send AND log only between 120 s and 150 s
 // 2 = hybrid: always send, but log to RAM only in [120 s, 150 s]
-#define ECO_MODE 2
+#define ECO_MODE 0
 
 // -----------------------------------------------------
 // Madgwick Configuration
 // -----------------------------------------------------
 MadgwickAHRS filter(100.0f, 0.1f); // 100 Hz, beta = 0.1
 
-const float    SAMPLE_FREQ      = 100.0f;               // Hz
-const uint32_t SAMPLE_PERIOD_US = 1000000UL / 100;      // 100 Hz
+const float    SAMPLE_FREQ      = 100.0f;          // Hz
+const uint32_t SAMPLE_PERIOD_US = 1000000UL / 100; // 100 Hz
 
 // -----------------------------------------------------
 // Logging window (used by ECO_MODE 1 and 2)
@@ -117,10 +117,9 @@ void loop() {
     uint32_t now = micros();
     uint32_t dt  = now - last;
     if (dt < SAMPLE_PERIOD_US) {
-        delayMicroseconds(SAMPLE_PERIOD_US - dt);
-        return;
+        return;  // ainda não passou 1 período
     }
-    last = micros();
+    last = now;
 
     // --------- IMU reading ---------
     float ax, ay, az;
@@ -175,7 +174,7 @@ void loop() {
     uint32_t t_ms = millis();
 
     // -------------------------------------------------
-    // ECO_MODE logic
+    // ECO_MODE logic (mantida)
     // -------------------------------------------------
     bool in_time_window = true;
     bool send_stream    = true;   // BLE + Serial
@@ -206,7 +205,19 @@ void loop() {
     }
 
     // --------- RAM logging (backup) ---------
-    if (log_to_ram && g_logCount < LOG_MAX_SAMPLES) {
+    bool logging_now = log_to_ram && (g_logCount < LOG_MAX_SAMPLES);
+    static bool was_logging = false;
+
+    // mensagens apenas no início/fim da janela de logging
+    if (logging_now && !was_logging) {
+        Serial.println("=== START RAM LOG WINDOW ===");
+    }
+    if (!logging_now && was_logging) {
+        Serial.println("=== END RAM LOG WINDOW ===");
+    }
+    was_logging = logging_now;
+
+    if (logging_now) {
         Sample &s = g_logBuf[g_logCount++];
 
         s.t_ms = t_ms;
@@ -234,28 +245,23 @@ void loop() {
         return;
     }
 
-    // --------- Full BLE payload (14 floats) ---------
-    // [ t_ms, qw, qx, qy, qz,
-    //   ax, ay, az, gx, gy, gz, mx, my, mz ]
-    float payload[14];
-    payload[0]  = (float)t_ms;  // timestamp [ms]
-    payload[1]  = qw;
-    payload[2]  = qx;
-    payload[3]  = qy;
-    payload[4]  = qz;
-    payload[5]  = ax;           // accel [g]
-    payload[6]  = ay;
-    payload[7]  = az;
-    payload[8]  = gx;           // gyro [rad/s]
-    payload[9]  = gy;
-    payload[10] = gz;
-    payload[11] = mx;           // magnetometer [µT]
-    payload[12] = my;
-    payload[13] = mz;
+    // -------------------------------------------------
+    // BLE payload: t_ms + quaternions + linear accel (m/s²)
+    // [ t_ms, qw, qx, qy, qz, ax_lin_mps2, ay_lin_mps2, az_lin_mps2 ]
+    // -------------------------------------------------
+    float payload[8];
+    payload[0] = (float)t_ms;       // timestamp [ms]
+    payload[1] = qw;
+    payload[2] = qx;
+    payload[3] = qy;
+    payload[4] = qz;
+    payload[5] = ax_lin_mps2;
+    payload[6] = ay_lin_mps2;
+    payload[7] = az_lin_mps2;
 
-    telemetryUpdate(payload, 14);
+    telemetryUpdate(payload, 8);
 
-    // --------- CSV over Serial ---------
+    // --------- CSV over Serial (continua completo) ---------
     Serial.print(t_ms);        Serial.print(',');
     Serial.print(qw, 6);       Serial.print(',');
     Serial.print(qx, 6);       Serial.print(',');
