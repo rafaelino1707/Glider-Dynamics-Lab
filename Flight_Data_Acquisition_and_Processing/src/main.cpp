@@ -8,9 +8,10 @@
 // -----------------------------------------------------
 // Operation Mode
 // -----------------------------------------------------
-// 1 = "eco" mode: only sends data between 120 s and 150 s since boot
-// 0 = always sending data (no time window)
-#define ECO_MODE 1
+// 0 = always send (no time window), no RAM logging
+// 1 = "eco": send AND log only between 120 s and 150 s
+// 2 = hybrid: always send, but log to RAM only in [120 s, 150 s]
+#define ECO_MODE 2
 
 // -----------------------------------------------------
 // Madgwick Configuration
@@ -21,10 +22,10 @@ const float    SAMPLE_FREQ      = 100.0f;               // Hz
 const uint32_t SAMPLE_PERIOD_US = 1000000UL / 100;      // 100 Hz
 
 // -----------------------------------------------------
-// Logging window (only used if ECO_MODE == 1)
+// Logging window (used by ECO_MODE 1 and 2)
 // -----------------------------------------------------
-const uint32_t START_LOG_MS    = 120000UL;  // Starts logging at 120 s
-const uint32_t LOG_DURATION_MS = 30000UL;   // Logs for 30 s (until 150 s)
+const uint32_t START_LOG_MS    = 120000UL;  // start logging at 120 s
+const uint32_t LOG_DURATION_MS = 30000UL;   // log for 30 s (until 150 s)
 
 // -----------------------------------------------------
 // RAM Logging (backup if BLE fails)
@@ -33,12 +34,12 @@ const uint32_t LOG_DURATION_MS = 30000UL;   // Logs for 30 s (until 150 s)
 struct Sample {
     uint32_t t_ms;
     float qw, qx, qy, qz;
-    float ax, ay, az;      //  g 
-    float gx, gy, gz;      //  rad/s
+    float ax, ay, az;      // accel [g]
+    float gx, gy, gz;      // gyro  [rad/s]
     float mx, my, mz;      // magnetometer
 };
 
-// RAM Log max samples 
+// max samples in RAM log
 constexpr size_t LOG_MAX_SAMPLES = 2000;
 
 Sample g_logBuf[LOG_MAX_SAMPLES];
@@ -98,7 +99,7 @@ void setup() {
 }
 
 void loop() {
-    // --------- Serial Command: 'D' → dump RAM ---------
+    // --------- Serial command: 'D' → dump RAM ---------
     if (Serial.available() > 0) {
         int c = Serial.read();
         if (c == 'D' || c == 'd') {
@@ -108,7 +109,7 @@ void loop() {
         }
     }
 
-    // --------- Always keeping BLE alive ---------
+    // --------- Always keep BLE stack alive ---------
     BLE.poll();
 
     // --------- Frequency control (100 Hz) ---------
@@ -121,21 +122,21 @@ void loop() {
     }
     last = micros();
 
-    // --------- IMU Reading ---------
+    // --------- IMU reading ---------
     float ax, ay, az;
     float gx, gy, gz;    // rad/s (for Madgwick)
     float mx, my, mz;
 
     imuRead(ax, ay, az, gx, gy, gz, mx, my, mz);
 
-    // --------- Updating Madgwick ---------
+    // --------- Update Madgwick ---------
     if (mx == 0.0f && my == 0.0f && mz == 0.0f) {
         filter.updateIMU(gx, gy, gz, ax, ay, az);
     } else {
         filter.update(gx, gy, gz, ax, ay, az, mx, my, mz);
     }
 
-    // Actual Quaternion
+    // Quaternion
     float qw = filter.q0;
     float qx = filter.q1;
     float qy = filter.q2;
@@ -156,9 +157,10 @@ void loop() {
     float gy_deg = gy * rad2deg;
     float gz_deg = gz * rad2deg;
 
-    // Linear Acceleration (without gravity)
+    // Linear acceleration (without gravity)
     float ax_lin, ay_lin, az_lin;
-    removeGravityFromAccel(qw, qx, qy, qz, ax, ay, az, ax_lin, ay_lin, az_lin);
+    removeGravityFromAccel(qw, qx, qy, qz, ax, ay, az,
+                           ax_lin, ay_lin, az_lin);
 
     // Conversion to m/s²
     const float g0 = 9.81f;
@@ -172,34 +174,38 @@ void loop() {
 
     uint32_t t_ms = millis();
 
-    // --------- Logging / sending window ---------
-    bool in_logging_window = true;
+    // -------------------------------------------------
+    // ECO_MODE logic
+    // -------------------------------------------------
+    bool in_time_window = true;
+    bool send_stream    = true;   // BLE + Serial
+    bool log_to_ram     = false;
 
-#if ECO_MODE
-    // ECO_MODE = 1  → logs only between 120 s and 150 s
-    in_logging_window =
-        (t_ms >= START_LOG_MS) &&
-        (t_ms <= (START_LOG_MS + LOG_DURATION_MS));
-#endif
+    if (ECO_MODE == 1) {
+        // send + log only in [120 s, 150 s]
+        in_time_window =
+            (t_ms >= START_LOG_MS) &&
+            (t_ms <= (START_LOG_MS + LOG_DURATION_MS));
 
-    // ----- RAM logger decision -----
-    bool log_to_ram = false;
+        send_stream = in_time_window;
+        log_to_ram  = in_time_window;
+    }
+    else if (ECO_MODE == 2) {
+        // always send; log to RAM only in [120 s, 150 s]
+        in_time_window =
+            (t_ms >= START_LOG_MS) &&
+            (t_ms <= (START_LOG_MS + LOG_DURATION_MS));
 
-#if ECO_MODE
-    // In flight (ECO_MODE=1) logs to RAM only inside the window
-    log_to_ram = in_logging_window;
-#else
-    // In test mode (ECO_MODE=0) never uses RAM
-    log_to_ram = false;
-#endif
-
-    // If outside logging window (in ECO_MODE=1),
-    // do nothing (IMU + Madgwick still run).
-    if (!in_logging_window) {
-        return;
+        send_stream = true;          // always
+        log_to_ram  = in_time_window;
+    }
+    else { // ECO_MODE == 0
+        // always send; never log to RAM
+        send_stream = true;
+        log_to_ram  = false;
     }
 
-    // --------- RAM logging (backup, only if log_to_ram=true) ---------
+    // --------- RAM logging (backup) ---------
     if (log_to_ram && g_logCount < LOG_MAX_SAMPLES) {
         Sample &s = g_logBuf[g_logCount++];
 
@@ -223,8 +229,14 @@ void loop() {
         s.mz = mz;
     }
 
+    // If we are not supposed to stream, stop here
+    if (!send_stream) {
+        return;
+    }
+
     // --------- Full BLE payload (14 floats) ---------
-    // [ t_ms, qw, qx, qy, qz, ax, ay, az, gx, gy, gz, mx, my, mz ]
+    // [ t_ms, qw, qx, qy, qz,
+    //   ax, ay, az, gx, gy, gz, mx, my, mz ]
     float payload[14];
     payload[0]  = (float)t_ms;  // timestamp [ms]
     payload[1]  = qw;
