@@ -7,7 +7,7 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 # -----------------------------
 # INPUT / OUTPUT
 # -----------------------------
-CSV_PATH = "log/20251215_042137_glider_ble.csv"
+CSV_PATH = "log/20251215_165855_glider_ble.csv"
 OUT_DIR = "log2"
 OUT_SUFFIX = "_integrated_nozupt_cutTail"
 

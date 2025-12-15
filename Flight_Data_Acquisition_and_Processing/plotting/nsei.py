@@ -7,7 +7,7 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 # -----------------------------
 # INPUT / OUTPUT
 # -----------------------------
-CSV_PATH = "log/20251215_042137_glider_ble.csv"
+CSV_PATH = "log/20251215_170220_glider_ble.csv"
 OUT_DIR = "log2"
 OUT_SUFFIX = "_integrated_boost"
 
@@ -52,7 +52,8 @@ LEAK_TAU_STILL_S  = 6.0    # strong damping when stationary-ish
 # -----------------------------
 # OPTIONAL: cut tail (keep your workaround)
 # -----------------------------
-CUT_TAIL_SECONDS = 5.0
+#CUT_TAIL_SECONDS = 5.0
+CUT_TAIL_SECONDS = 0
 MIN_KEEP_SECONDS = 2.0
 
 
