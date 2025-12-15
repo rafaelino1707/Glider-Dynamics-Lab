@@ -10,3 +10,7 @@ void quatToEulerZYX(float q0, float q1, float q2, float q3,
 void removeGravityFromAccel(float q0, float q1, float q2, float q3,
                             float ax, float ay, float az,
                             float& ax_lin, float& ay_lin, float& az_lin);
+
+void rotateBodyToWorld(float qw, float qx, float qy, float qz,
+                              float bx, float by, float bz,
+                              float &wx, float &wy, float &wz);

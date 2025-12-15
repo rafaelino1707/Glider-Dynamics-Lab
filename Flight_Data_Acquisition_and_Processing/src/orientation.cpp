@@ -48,4 +48,19 @@ void removeGravityFromAccel(float q0, float q1, float q2, float q3,
     ax_lin = ax - gx;
     ay_lin = ay - gy;
     az_lin = az - gz;
+
+}
+
+void rotateBodyToWorld(float qw, float qx, float qy, float qz,
+                              float bx, float by, float bz,
+                              float &wx, float &wy, float &wz)
+{
+    // v_world = q ⊗ v_body ⊗ q_conj
+    const float tx = 2.0f * (qy*bz - qz*by);
+    const float ty = 2.0f * (qz*bx - qx*bz);
+    const float tz = 2.0f * (qx*by - qy*bx);
+
+    wx = bx + qw*tx + (qy*tz - qz*ty);
+    wy = by + qw*ty + (qz*tx - qx*tz);
+    wz = bz + qw*tz + (qx*ty - qy*tx);
 }
