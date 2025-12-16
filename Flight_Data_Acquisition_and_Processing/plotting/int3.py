@@ -7,7 +7,7 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 # -----------------------------
 # INPUT / OUTPUT
 # -----------------------------
-CSV_PATH = "ensaios/20251216_025635_glider_ble.csv"
+CSV_PATH = "ensaios/20251216_033825_glider_ble.csv"
 OUT_DIR = "log2"
 OUT_SUFFIX = "_integrated_nozupt_cutTail"
 
@@ -36,7 +36,7 @@ DT_MAX = 0.10
 # -----------------------------
 # CUT LAST X SECONDS (your fix)
 # -----------------------------
-CUT_TAIL_SECONDS = 5      # cuts last 4–5 s (where peak happens)
+CUT_TAIL_SECONDS = 0      # cuts last 4–5 s (where peak happens)
 MIN_KEEP_SECONDS = 2.0      # safety: never keep less than this
 
 
