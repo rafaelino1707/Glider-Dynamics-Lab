@@ -7,7 +7,6 @@ import os
 import glob
 import math
 import threading
-import matplotlib.pyplot as plt
 
 from bleak import BleakScanner, BleakClient
 
@@ -19,7 +18,7 @@ except ImportError:
     HAVE_WINSOUND = False
 
 MAX_LOG_FILES = 50
-LOG_DIR = "log"
+LOG_DIR = "ensaios"
 
 # Alert moments based on the Arduino clock (ms)
 ALERT1_T_IMU_MS = 120000.0   # 2 min
@@ -100,41 +99,7 @@ async def main():
         buf_lock = threading.Lock()
         stop_plot = False  # IMPORTANT: start plotting
 
-        def plot_thread():
-            nonlocal stop_plot
-            plt.ion()
-            fig, ax = plt.subplots()
-            (l1,) = ax.plot([], [], label="roll [deg]")
-            (l2,) = ax.plot([], [], label="pitch [deg]")
-            (l3,) = ax.plot([], [], label="yaw [deg]")
-            ax.set_xlabel("t_imu [s]")
-            ax.set_ylabel("deg")
-            ax.grid(True)
-            ax.legend()
-
-            while not stop_plot:
-                with buf_lock:
-                    tt = t_buf[-2000:]
-                    rr = roll_buf[-2000:]
-                    pp = pitch_buf[-2000:]
-                    yy = yaw_buf[-2000:]
-
-                if len(tt) > 2:
-                    l1.set_data(tt, rr)
-                    l2.set_data(tt, pp)
-                    l3.set_data(tt, yy)
-                    ax.set_xlim(tt[0], tt[-1])
-                    ax.relim()
-                    ax.autoscale_view(scalex=False, scaley=True)
-
-                plt.pause(0.05)
-
-            plt.ioff()
-            plt.show()
-
-        th = threading.Thread(target=plot_thread, daemon=True)
-        th.start()
-
+ 
         with open(csv_path, mode="w", newline="") as f:
             writer = csv.writer(f)
 
