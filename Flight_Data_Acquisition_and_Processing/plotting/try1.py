@@ -7,11 +7,9 @@ import os
 import glob
 import math
 import threading
-import matplotlib.pyplot as plt
 
 from bleak import BleakScanner, BleakClient
 
-# Beep on Windows; on other OS we use a simple fallback
 try:
     import winsound
     HAVE_WINSOUND = True
@@ -19,19 +17,22 @@ except ImportError:
     HAVE_WINSOUND = False
 
 MAX_LOG_FILES = 50
-LOG_DIR = "log"
+LOG_DIR = "ensaios"
 
-# Alert moments based on the Arduino clock (ms)
-ALERT1_T_IMU_MS = 120000.0   # 2 min
-ALERT2_T_IMU_MS = 149000.0   # 2.5 min (end of window)
+ALERT1_T_IMU_MS = 120000.0
+ALERT2_T_IMU_MS = 149000.0
 
 DEVICE_NAME  = "GliderIMU"
 SERVICE_UUID = "12345678-1234-1234-1234-1234567890AB"
 CHAR_UUID    = "12345678-1234-1234-1234-1234567890AC"
 
-# Payload (floats) from Arduino (14 floats):
-# [t_ms, qw,qx,qy,qz, ax_lin,ay_lin,az_lin, gx,gy,gz, h_rel_m, p_pa, t_c]
-N_FLOATS = 14
+# Payload (floats):
+# [t_ms, qw, qx, qy, qz,
+#  ax_lin_mps2, ay_lin_mps2, az_lin_mps2,
+#  gx_rads, gy_rads, gz_rads,
+#  vx_mps, vy_mps, vz_mps,
+#  px_m, py_m, pz_m]
+N_FLOATS = 17
 
 
 def prepare_log_file() -> str:
@@ -51,22 +52,19 @@ def prepare_log_file() -> str:
                 print(f"[LOG] Error removing {old_path}: {e}")
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{ts}_glider_ble.csv"
+    filename = f"{ts}_glider_ble_with_pos.csv"
     return os.path.join(LOG_DIR, filename)
 
 
 def quat_to_euler_zyx(qw, qx, qy, qz):
-    # roll (X)
     sinr_cosp = 2.0 * (qw * qx + qy * qz)
     cosr_cosp = 1.0 - 2.0 * (qx * qx + qy * qy)
     roll = math.atan2(sinr_cosp, cosr_cosp)
 
-    # pitch (Y)
     sinp = 2.0 * (qw * qy - qz * qx)
     sinp = max(-1.0, min(1.0, sinp))
     pitch = math.asin(sinp)
 
-    # yaw (Z)
     siny_cosp = 2.0 * (qw * qz + qx * qy)
     cosy_cosp = 1.0 - 2.0 * (qy * qy + qz * qz)
     yaw = math.atan2(siny_cosp, cosy_cosp)
@@ -77,9 +75,7 @@ def quat_to_euler_zyx(qw, qx, qy, qz):
 async def main():
     print(f"[+] Searching for BLE device '{DEVICE_NAME}'...")
 
-    device = await BleakScanner.find_device_by_filter(
-        lambda d, ad: d.name == DEVICE_NAME
-    )
+    device = await BleakScanner.find_device_by_filter(lambda d, ad: d.name == DEVICE_NAME)
 
     if device is None:
         print("[-] Device not found. Ensure it is powered and advertising.")
@@ -94,63 +90,12 @@ async def main():
         csv_path = prepare_log_file()
         print(f"[+] Writing CSV to: {os.path.abspath(csv_path)}")
 
-        # --------- live plot buffers ----------
         t_buf = []
         roll_buf = []
         pitch_buf = []
         yaw_buf = []
-        h_buf = []
-
         buf_lock = threading.Lock()
-        stop_plot = False  # start plotting
-
-        def plot_thread():
-            nonlocal stop_plot
-            plt.ion()
-            fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
-
-            (l1,) = ax1.plot([], [], label="roll [deg]")
-            (l2,) = ax1.plot([], [], label="pitch [deg]")
-            (l3,) = ax1.plot([], [], label="yaw [deg]")
-            ax1.set_ylabel("deg")
-            ax1.grid(True)
-            ax1.legend()
-
-            (l4,) = ax2.plot([], [], label="baro h_rel [m]")
-            ax2.set_xlabel("t_imu [s]")
-            ax2.set_ylabel("m")
-            ax2.grid(True)
-            ax2.legend()
-
-            while not stop_plot:
-                with buf_lock:
-                    tt = t_buf[-2000:]
-                    rr = roll_buf[-2000:]
-                    pp = pitch_buf[-2000:]
-                    yy = yaw_buf[-2000:]
-                    hh = h_buf[-2000:]
-
-                if len(tt) > 2:
-                    l1.set_data(tt, rr)
-                    l2.set_data(tt, pp)
-                    l3.set_data(tt, yy)
-                    l4.set_data(tt, hh)
-
-                    ax1.set_xlim(tt[0], tt[-1])
-
-                    ax1.relim()
-                    ax1.autoscale_view(scalex=False, scaley=True)
-
-                    ax2.relim()
-                    ax2.autoscale_view(scalex=False, scaley=True)
-
-                plt.pause(0.05)
-
-            plt.ioff()
-            plt.show()
-
-        th = threading.Thread(target=plot_thread, daemon=True)
-        th.start()
+        stop_plot = False
 
         with open(csv_path, mode="w", newline="") as f:
             writer = csv.writer(f)
@@ -162,7 +107,8 @@ async def main():
                 "qw", "qx", "qy", "qz",
                 "ax_lin_mps2", "ay_lin_mps2", "az_lin_mps2",
                 "gx_rads", "gy_rads", "gz_rads",
-                "baro_h_rel_m", "baro_p_pa", "baro_t_c",
+                "vx_mps", "vy_mps", "vz_mps",
+                "px_m", "py_m", "pz_m",
                 "roll_deg", "pitch_deg", "yaw_deg",
             ])
             f.flush()
@@ -195,33 +141,28 @@ async def main():
                     qw, qx, qy, qz,
                     ax_lin_mps2, ay_lin_mps2, az_lin_mps2,
                     gx_rads, gy_rads, gz_rads,
-                    baro_h_rel_m, baro_p_pa, baro_t_c
+                    vx_mps, vy_mps, vz_mps,
+                    px_m, py_m, pz_m,
                 ) = vals
 
-                # PC time
                 t_pc = time.time()
                 t_rel = t_pc - start_time
                 iso = datetime.fromtimestamp(t_pc).isoformat()
 
-                # IMU time
                 t_imu_s = t_imu_ms / 1000.0
 
-                # Euler angles from quaternion
                 roll, pitch, yaw = quat_to_euler_zyx(qw, qx, qy, qz)
                 rad2deg = 180.0 / math.pi
                 roll_d = roll * rad2deg
                 pitch_d = pitch * rad2deg
                 yaw_d = yaw * rad2deg
 
-                # Update live plot buffers
                 with buf_lock:
                     t_buf.append(t_imu_s)
                     roll_buf.append(roll_d)
                     pitch_buf.append(pitch_d)
                     yaw_buf.append(yaw_d)
-                    h_buf.append(baro_h_rel_m)
 
-                # ALERT using IMU clock
                 if (not alert1_done) and (t_imu_ms >= ALERT1_T_IMU_MS):
                     do_beep(2000, 400, "IMU reached 120 s (start log window).")
                     alert1_done = True
@@ -230,7 +171,6 @@ async def main():
                     do_beep(1500, 600, "IMU reached 150 s (end log window).")
                     alert2_done = True
 
-                # CSV row
                 writer.writerow([
                     f"{t_imu_ms:.1f}",
                     iso,
@@ -238,18 +178,19 @@ async def main():
                     f"{qw:.6f}", f"{qx:.6f}", f"{qy:.6f}", f"{qz:.6f}",
                     f"{ax_lin_mps2:.6f}", f"{ay_lin_mps2:.6f}", f"{az_lin_mps2:.6f}",
                     f"{gx_rads:.6f}", f"{gy_rads:.6f}", f"{gz_rads:.6f}",
-                    f"{baro_h_rel_m:.4f}", f"{baro_p_pa:.1f}", f"{baro_t_c:.2f}",
+                    f"{vx_mps:.6f}", f"{vy_mps:.6f}", f"{vz_mps:.6f}",
+                    f"{px_m:.6f}", f"{py_m:.6f}", f"{pz_m:.6f}",
                     f"{roll_d:.6f}", f"{pitch_d:.6f}", f"{yaw_d:.6f}",
                 ])
                 f.flush()
 
-                # Terminal print
                 print(
                     f"{t_imu_s:8.3f}s (IMU)  "
                     f"q=({qw:+.3f},{qx:+.3f},{qy:+.3f},{qz:+.3f})  "
                     f"a_lin=({ax_lin_mps2:+.3f},{ay_lin_mps2:+.3f},{az_lin_mps2:+.3f})  "
                     f"w=({gx_rads:+.3f},{gy_rads:+.3f},{gz_rads:+.3f})  "
-                    f"baro(h={baro_h_rel_m:+.2f} m, p={baro_p_pa:.0f} Pa, T={baro_t_c:.1f} C)  "
+                    f"v=({vx_mps:+.3f},{vy_mps:+.3f},{vz_mps:+.3f})  "
+                    f"p=({px_m:+.3f},{py_m:+.3f},{pz_m:+.3f})  "
                     f"euler=({roll_d:+.1f},{pitch_d:+.1f},{yaw_d:+.1f})"
                 )
 
