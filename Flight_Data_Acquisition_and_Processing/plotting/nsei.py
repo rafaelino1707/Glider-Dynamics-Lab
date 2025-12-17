@@ -7,7 +7,7 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 # -----------------------------
 # INPUT / OUTPUT
 # -----------------------------
-CSV_PATH = "ensaios/20251216_033825_glider_ble.csv"
+CSV_PATH = "ensaios/20251217_003339_glider_ble.csv"
 OUT_DIR = "log2"
 OUT_SUFFIX = "_integrated_boost"
 
