@@ -29,6 +29,11 @@ struct IntegratorConfig {
 
 class MotionIntegrator {
 public:
+  void setVelocity(float vx, float vy, float vz) { 
+    v_ = {vx, vy, vz}; 
+    v_prev_ = v_; 
+  }
+
   MotionIntegrator();
 
   void setConfig(const IntegratorConfig& cfg);

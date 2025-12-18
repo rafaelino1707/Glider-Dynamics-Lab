@@ -1,5 +1,6 @@
 #include "telemetry.h"
 #include <ArduinoBLE.h>
+#include <string.h>
 
 // -----------------------------------------------------
 // Connection State BLE
@@ -9,10 +10,18 @@ static bool g_bleConnected = false;
 // UUIDs custom
 static BLEService imuService("12345678-1234-1234-1234-1234567890AB");
 
+// Char 1: IMU legacy (14 floats = 56 bytes)
 static BLECharacteristic imuChar(
     "12345678-1234-1234-1234-1234567890AC",
     BLERead | BLENotify,
-    56    // 14 floats * 4 bytes
+    56
+);
+
+// Char 2: NAV (10 floats = 40 bytes)
+static BLECharacteristic navChar(
+    "12345678-1234-1234-1234-1234567890AD",
+    BLERead | BLENotify,
+    40
 );
 
 // callbacks prototypes
@@ -20,7 +29,7 @@ static void onBleConnect(BLEDevice central);
 static void onBleDisconnect(BLEDevice central);
 
 // -----------------------------------------------------
-// Telemetry/BLE inicialization
+// Telemetry/BLE initialization
 // -----------------------------------------------------
 bool telemetryBegin() {
     if (!BLE.begin()) {
@@ -32,11 +41,14 @@ bool telemetryBegin() {
     BLE.setAdvertisedService(imuService);
 
     imuService.addCharacteristic(imuChar);
+    imuService.addCharacteristic(navChar);
     BLE.addService(imuService);
 
     // Initial values
-    uint8_t zero[56] = {0};
-    imuChar.writeValue(zero, sizeof(zero));
+    uint8_t zero56[56] = {0};
+    uint8_t zero40[40] = {0};
+    imuChar.writeValue(zero56, sizeof(zero56));
+    navChar.writeValue(zero40, sizeof(zero40));
 
     // Connection callbacks
     BLE.setEventHandler(BLEConnected,    onBleConnect);
@@ -50,33 +62,42 @@ bool telemetryBegin() {
 // -----------------------------------------------------
 // Sending data through BLE
 // -----------------------------------------------------
-void telemetryUpdate(const float* data, size_t len) {
-    if (len == 0) return;
-
-    const size_t bytes = len * sizeof(float);
-    if (bytes > 56) return; // Maximum of 14 floats
-
+void telemetryUpdateIMU14(const float* data14) {
+    if (!data14) return;
     uint8_t buf[56];
-    memcpy(buf, data, bytes);
+    memcpy(buf, data14, 56);
+    imuChar.writeValue(buf, 56);
+    BLE.poll();
+}
 
-    imuChar.writeValue(buf, bytes);
+void telemetryUpdateNAV10(const float* data10) {
+    if (!data10) return;
+    uint8_t buf[40];
+    memcpy(buf, data10, 40);
+    navChar.writeValue(buf, 40);
     BLE.poll();
 }
 
 // -----------------------------------------------------
-// Connectin State BLE 
+// Connection State BLE
 // -----------------------------------------------------
 bool telemetryIsConnected() {
     return g_bleConnected;
 }
 
 // -----------------------------------------------------
-// Callbacks of Connection
+// Callbacks
 // -----------------------------------------------------
 static void onBleConnect(BLEDevice central) {
+    (void)central;
     g_bleConnected = true;
 }
 
 static void onBleDisconnect(BLEDevice central) {
+    (void)central;
     g_bleConnected = false;
+}
+
+void telemetryPoll() {
+    BLE.poll();
 }
