@@ -7,9 +7,10 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 # -----------------------------
 # INPUT / OUTPUT
 # -----------------------------
-CSV_PATH = "ensaios/20251217_112952_glider_ble.csv"
+CSV_PATH = "test_campaign/realtest4.csv"
 OUT_DIR = "log2"
 OUT_SUFFIX = "_integrated_boost"
+
 
 # -----------------------------
 # BASE SETTINGS
@@ -56,6 +57,13 @@ LEAK_TAU_STILL_S  = 6.0    # strong damping when stationary-ish
 CUT_TAIL_SECONDS = 0
 MIN_KEEP_SECONDS = 2.0
 
+def clean_folder(folder):
+    if not os.path.exists(folder):
+        return
+    for fname in os.listdir(folder):
+        fpath = os.path.join(folder, fname)
+        if os.path.isfile(fpath):
+            os.remove(fpath)
 
 def quat_to_euler_zyx(qw, qx, qy, qz):
     sinr_cosp = 2.0 * (qw*qx + qy*qz)
@@ -395,90 +403,163 @@ def main():
     print(f"Saved: {out_path}")
 
     # -----------------------------
+    # EXPORT PLOT SERIES TO CSVs
+    # -----------------------------
+    PLOTS_DIR = "log_plots"
+    os.makedirs(PLOTS_DIR, exist_ok=True)
+
+    def _safe_name(s: str) -> str:
+        keep = []
+        for ch in s:
+            if ch.isalnum() or ch in ("-", "_"):
+                keep.append(ch)
+            elif ch in (" ", ".", ":", "/", "\\"):
+                keep.append("_")
+        return "".join(keep).strip("_")
+
+    def save_plot_csv(plot_name: str, series: dict):
+        """
+        series: dict {column_name: 1D array-like}, all with same length N.
+        """
+        fname = f"{in_base}{OUT_SUFFIX}__{_safe_name(plot_name)}.csv"
+        fpath = os.path.join(PLOTS_DIR, fname)
+        pd.DataFrame(series).to_csv(fpath, index=False)
+        print(f"[plot-csv] Saved: {fpath}")
+
+    clean_folder(PLOTS_DIR)
+    # -----------------------------
     # PLOTS (same set + extra useful ones)
     # -----------------------------
+    save_plot_csv("distance_vs_time", {
+        "t_imu_s": t,
+        "dist_m": dist,
+    })
+
     plt.figure()
     plt.plot(t, dist)
-    plt.xlabel("Tempo IMU [s]")
-    plt.ylabel("Distância percorrida (path) [m]")
-    plt.title("Distância percorrida vs tempo")
+    plt.xlabel("Time IMU [s]")
+    plt.ylabel("Total Distance (path) [m]")
+    plt.title("Distance vs Time")
     plt.grid(True)
 
+    save_plot_csv("speed_vs_time", {
+        "t_imu_s": t,
+        "speed_mps": speed,
+    })
     plt.figure()
     plt.plot(t, speed)
-    plt.xlabel("Tempo IMU [s]")
+    plt.xlabel("Time IMU [s]")
     plt.ylabel("|v| [m/s]")
-    plt.title("Velocidade (magnitude) vs tempo")
+    plt.title("Velocity (Magnitude) vs Time")
     plt.grid(True)
 
+    save_plot_csv("velocity_components_vs_time", {
+        "t_imu_s": t,
+        "vx_mps": v[:, 0],
+        "vy_mps": v[:, 1],
+        "vz_mps": v[:, 2],
+    })
     plt.figure()
     plt.plot(t, v[:, 0], label="vx")
     plt.plot(t, v[:, 1], label="vy")
     plt.plot(t, v[:, 2], label="vz")
-    plt.xlabel("Tempo IMU [s]")
-    plt.ylabel("Velocidade [m/s]")
-    plt.title("Componentes da velocidade vs tempo")
+    plt.xlabel("Time IMU [s]")
+    plt.ylabel("Velocity [m/s]")
+    plt.title("Velocity Vector Components vs Time")
     plt.grid(True)
     plt.legend()
 
+    save_plot_csv("az_raw_clean_used_vs_time", {
+        "t_imu_s": t,
+        "az_raw_mps2": a_lin[:, 2],
+        "az_clean_mps2": a_clean[:, 2],
+        "az_used_mps2": a_used[:, 2],
+    })
     plt.figure()
     plt.plot(t, a_lin[:, 2], label="az raw")
     plt.plot(t, a_clean[:, 2], label="az clean (LPF+Hampel)")
     plt.plot(t, a_used[:, 2], label="az used (bias-corrected)")
-    plt.xlabel("Tempo IMU [s]")
+    plt.xlabel("Time IMU [s]")
     plt.ylabel("a_z [m/s²]")
-    plt.title("Aceleração Z (raw vs clean vs used)")
+    plt.title("Acelaration Z (raw vs clean vs used)")
     plt.grid(True)
     plt.legend()
 
+    save_plot_csv("euler_vs_time", {
+        "t_imu_s": t,
+        "roll_deg": roll_deg,
+        "pitch_deg": pitch_deg,
+        "yaw_deg_unwrap": yaw_deg,
+    })
     plt.figure()
     plt.plot(t, roll_deg, label="roll")
     plt.plot(t, pitch_deg, label="pitch")
     plt.plot(t, yaw_deg, label="yaw (unwrap)")
-    plt.xlabel("Tempo IMU [s]")
-    plt.ylabel("Ângulo [deg]")
-    plt.title("Orientação (Euler) vs tempo")
+    plt.xlabel("Time IMU [s]")
+    plt.ylabel("Angle [deg]")
+    plt.title("Orientation (Euler) vs Time")
     plt.grid(True)
     plt.legend()
 
+    save_plot_csv("p_stationary_vs_time", {
+        "t_imu_s": t,
+        "p_stationary": p_stat,
+    })
     plt.figure()
     plt.plot(t, p_stat)
-    plt.xlabel("Tempo IMU [s]")
+    plt.xlabel("Time IMU [s]")
     plt.ylabel("p_stationary [0..1]")
-    plt.title("Probabilidade de estar parado (soft)")
+    plt.title("Probability of Being Stopped (Soft)")
     plt.grid(True)
 
+    save_plot_csv("trajectory_xy", {
+        "x_m": x[:, 0],
+        "y_m": x[:, 1],
+    })
     plt.figure()
     plt.plot(x[:, 0], x[:, 1])
     plt.xlabel("x [m]")
     plt.ylabel("y [m]")
-    plt.title("Trajetória 2D (XY)")
+    plt.title("2D Trajectory (XY)")
     plt.axis("equal")
     plt.grid(True)
 
+    save_plot_csv("trajectory_xz", {
+        "x_m": x[:, 0],
+        "z_m": x[:, 2],
+    })
     plt.figure()
     plt.plot(x[:, 0], x[:, 2])
     plt.xlabel("x [m]")
     plt.ylabel("z [m]")
-    plt.title("Trajetória 2D (XZ)")
+    plt.title("2D Trajectory (XZ)")
     plt.axis("equal")
     plt.grid(True)
 
+    save_plot_csv("trajectory_yz", {
+        "y_m": x[:, 1],
+        "z_m": x[:, 2],
+    })
     plt.figure()
     plt.plot(x[:, 1], x[:, 2])
     plt.xlabel("y [m]")
     plt.ylabel("z [m]")
-    plt.title("Trajetória 2D (YZ)")
+    plt.title("2D Trajectory (YZ)")
     plt.axis("equal")
     plt.grid(True)
 
+    save_plot_csv("trajectory_xyz", {
+        "x_m": x[:, 0],
+        "y_m": x[:, 1],
+        "z_m": x[:, 2],
+    })
     fig = plt.figure()
     ax3d = fig.add_subplot(111, projection="3d")
     ax3d.plot(x[:, 0], x[:, 1], x[:, 2])
     ax3d.set_xlabel("x [m]")
     ax3d.set_ylabel("y [m]")
     ax3d.set_zlabel("z [m]")
-    ax3d.set_title("Trajetória 3D (integrada)")
+    ax3d.set_title("3D Trajectory (Integrated)")
 
     plt.show()
 
