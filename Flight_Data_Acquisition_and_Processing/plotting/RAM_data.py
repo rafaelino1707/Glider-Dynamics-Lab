@@ -2,7 +2,7 @@ import serial
 import csv
 import time
 
-PORT = "COM7"         # ajusta se for outra porta
+PORT = "COM11"         # ajusta se for outra porta
 BAUD = 115200         # igual ao Arduino
 OUTPUT = "ram_dump.csv"
 
